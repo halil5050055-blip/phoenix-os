@@ -46,6 +46,30 @@ The project treats documentation and memory as first-class infrastructure. Decis
 3. Review [`TODO.md`](TODO.md) for current priorities.
 4. Record durable decisions in `memory/` and technical documentation in `docs/`.
 
+## Vertical 1 Backend
+
+The first working backend slice is a Node.js 24 and TypeScript modular monolith using SQLite. It supports lead intake and qualification, conversion to a client, deterministic commercial-offer drafts, follow-up tasks, idempotent commands, and audit events.
+
+```bash
+npm install
+npm test
+npm start
+```
+
+The API listens on `http://localhost:3000` and stores local data in `data/phoenix-bos.sqlite`. Set `PORT` or `DATABASE_PATH` to override those defaults. Every `POST` endpoint requires an `Idempotency-Key` header. Monetary amounts are integer minor units; for example, `12500` represents EUR 125.00. Percentage discounts use integer basis points and round down to the nearest minor unit.
+
+Available endpoints:
+
+- `POST /api/leads`
+- `GET /api/leads`
+- `POST /api/leads/:id/qualify`
+- `POST /api/leads/:id/convert`
+- `POST /api/commercial-offers`
+- `GET /api/commercial-offers/:id`
+- `POST /api/commercial-offers/:id/follow-up`
+
+This milestone intentionally excludes authentication, Telegram, PDF generation, email delivery, frontend applications, AI integrations, and microservices.
+
 ## Status
 
 Phoenix OS is in its foundation phase. The initial repository structure and governance documents are in place; domain workflows and software components will be added incrementally.
