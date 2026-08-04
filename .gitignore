@@ -44,6 +44,8 @@ pnpm-debug.log*
 # Runtime files
 *.pid
 *.pid.lock
+*.sqlite
+*.sqlite-*
 
 # VS Code
 .vscode/*

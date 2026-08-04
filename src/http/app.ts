@@ -10,7 +10,9 @@ import { AuthService } from "../modules/auth/auth-service.js";
 import { authenticate, authorize } from "../modules/auth/middleware.js";
 import { hashPassword } from "../modules/auth/password.js";
 import { UserService } from "../modules/users/user-service.js";
-import { convertLeadSchema, createLeadSchema, createOfferSchema, createUserSchema, followUpSchema, loginSchema, qualifyLeadSchema, submitForApprovalSchema, updateUserSchema } from "./schemas.js";
+import { TaskService } from "../modules/tasks/task-service.js";
+import { recordAuditEvent } from "../shared/audit.js";
+import { convertLeadSchema, createLeadSchema, createOfferSchema, createUserSchema, followUpSchema, loginSchema, qualifyLeadSchema, submitForApprovalSchema, telegramAuditSchema, updateUserSchema } from "./schemas.js";
 
 function validate(schema: ZodType, value: unknown): unknown {
   const result = schema.safeParse(value);
@@ -48,9 +50,15 @@ export function createApp(database: Database, config: AppConfig) {
   const leads = new LeadService(database);
   const offers = new OfferService(database);
   const users = new UserService(database);
+  const tasks = new TaskService(database);
   const auth = new AuthService(database, config.jwtSecret, config.tokenTtlSeconds);
   const commands = new CommandExecutor(database);
   app.use(express.json({ limit: "100kb" }));
+
+  app.get("/health", (_request, response) => {
+    const result = database.prepare("SELECT 1 AS ready").get() as { ready: number };
+    response.json({ status: result.ready === 1 ? "ok" : "unavailable" });
+  });
 
   app.post("/api/auth/login", async (request, response) => {
     const body = validate(loginSchema, request.body) as { email: string; password: string };
@@ -134,6 +142,23 @@ export function createApp(database: Database, config: AppConfig) {
   });
 
   app.get("/api/commercial-offers/:id", authorize("ADMIN", "MANAGER", "SALES", "ACCOUNTANT"), (request, response) => response.json(offers.get(resourceId(request))));
+
+  app.get("/api/commercial-offers", authorize("ADMIN", "MANAGER", "SALES", "ACCOUNTANT"), (_request, response) => response.json({ data: offers.list() }));
+
+  app.get("/api/tasks", authorize("ADMIN", "MANAGER", "SALES"), (_request, response) => response.json({ data: tasks.list() }));
+
+  app.post("/api/integrations/telegram/audit", authorize("ADMIN", "MANAGER", "SALES"), (request, response) => {
+    const body = validate(telegramAuditSchema, request.body) as { updateId: number; telegramUserId: string; command: string; allowed: boolean };
+    const result = commands.execute("RECORD_TELEGRAM_COMMAND", idempotencyKey(request), body, userActor(request), (context) => {
+      recordAuditEvent(database, "TELEGRAM_COMMAND_RECEIVED", "TELEGRAM_USER", body.telegramUserId, {
+        updateId: body.updateId,
+        command: body.command,
+        allowed: body.allowed,
+      }, context);
+      return { body: { recorded: true }, statusCode: 201 };
+    });
+    response.status(result.statusCode).set("Idempotency-Replayed", String(result.replayed)).json(result.body);
+  });
 
   app.post("/api/commercial-offers/:id/submit-for-approval", authorize("ADMIN", "MANAGER", "SALES"), (request, response) => {
     const body = validate(submitForApprovalSchema, request.body) as { reason?: string };

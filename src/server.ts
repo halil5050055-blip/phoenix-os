@@ -1,35 +1,36 @@
 import { chmodSync, mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname } from "node:path";
 import { createApp } from "./http/app.js";
 import { createDatabase } from "./shared/database.js";
 import { bootstrapInitialAdmin } from "./modules/users/bootstrap.js";
+import { loadBackendConfig } from "./config.js";
 
-const usesDefaultDatabasePath = process.env.DATABASE_PATH === undefined;
-const databasePath = resolve(process.env.DATABASE_PATH ?? "data/phoenix-bos.sqlite");
-mkdirSync(dirname(databasePath), { recursive: true, mode: 0o700 });
-if (usesDefaultDatabasePath) chmodSync(dirname(databasePath), 0o700);
-const database = createDatabase(databasePath);
-const jwtSecret = process.env.JWT_SECRET;
-if (!jwtSecret) throw new Error("JWT_SECRET is required");
-await bootstrapInitialAdmin(database, {
-  ...(process.env.INITIAL_ADMIN_EMAIL ? { email: process.env.INITIAL_ADMIN_EMAIL } : {}),
-  ...(process.env.INITIAL_ADMIN_PASSWORD ? { password: process.env.INITIAL_ADMIN_PASSWORD } : {}),
-  ...(process.env.INITIAL_ADMIN_NAME ? { displayName: process.env.INITIAL_ADMIN_NAME } : {}),
-});
-const port = Number(process.env.PORT ?? 3000);
-const host = process.env.HOST?.trim() || "127.0.0.1";
-if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error("PORT must be an integer between 1 and 65535");
+const config = loadBackendConfig(process.env);
+mkdirSync(dirname(config.databasePath), { recursive: true, mode: 0o700 });
+if (config.nodeEnv !== "production" && process.env.DATABASE_PATH === undefined) chmodSync(dirname(config.databasePath), 0o700);
+const database = createDatabase(config.databasePath);
+await bootstrapInitialAdmin(database, config.initialAdmin);
 
-const server = createApp(database, { jwtSecret }).listen(port, host, () => {
-  console.log(`Phoenix BOS API listening on http://${host}:${port}`);
+const server = createApp(database, { jwtSecret: config.jwtSecret }).listen(config.port, config.host, () => {
+  console.log(`Phoenix BOS API listening on ${config.host}:${config.port}`);
 });
 
-function shutdown(): void {
+let shuttingDown = false;
+function shutdown(signal: string): void {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`Phoenix BOS received ${signal}; shutting down`);
+  const forceExit = setTimeout(() => {
+    console.error("Phoenix BOS shutdown timed out");
+    process.exit(1);
+  }, 10_000);
+  forceExit.unref();
   server.close(() => {
+    clearTimeout(forceExit);
     database.close();
     process.exit(0);
   });
 }
 
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));

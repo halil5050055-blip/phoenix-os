@@ -59,7 +59,7 @@ INITIAL_ADMIN_PASSWORD="replace-with-a-strong-password" \
 npm start
 ```
 
-The API listens only on `http://127.0.0.1:3000` by default and stores local data in `data/phoenix-bos.sqlite` with owner-only permissions. `JWT_SECRET` is always required and must contain at least 32 UTF-8 bytes. On an empty database, `INITIAL_ADMIN_EMAIL` and an `INITIAL_ADMIN_PASSWORD` of at least 12 characters are required; they are ignored after the first user exists. Set `INITIAL_ADMIN_NAME`, `PORT`, `HOST`, or `DATABASE_PATH` to override their defaults. Setting `HOST` to a non-loopback address requires transport security and appropriate network controls.
+The API binds to `0.0.0.0` using `PORT`, with a local fallback of `3000`, and stores local development data in `data/phoenix-bos.sqlite`. `JWT_SECRET` is always required and must contain at least 32 UTF-8 bytes. On an empty database, `INITIAL_ADMIN_EMAIL` and an `INITIAL_ADMIN_PASSWORD` of at least 12 characters are required; they are ignored after the first user exists. Production requires every documented backend variable and enforces `DATABASE_PATH=/data/phoenix-bos.sqlite`.
 
 All endpoints except login require `Authorization: Bearer <token>`. Logout revokes the presented JWT immediately. Business commands and user mutations also require an `Idempotency-Key` header, scoped to the authenticated user. Monetary amounts are integer minor units; for example, `12500` represents EUR 125.00. Percentage discounts use integer basis points and round down to the nearest minor unit.
 
@@ -67,6 +67,7 @@ Successful business commands atomically persist state changes, domain events, au
 
 Available endpoints:
 
+- `GET /health` — public deployment readiness
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
 - `POST /api/users` — Admin
@@ -80,12 +81,17 @@ Available endpoints:
 - `POST /api/leads/:id/convert`
 - `POST /api/commercial-offers`
 - `GET /api/commercial-offers/:id`
+- `GET /api/commercial-offers`
+- `GET /api/tasks`
+- `POST /api/integrations/telegram/audit`
 - `POST /api/commercial-offers/:id/submit-for-approval`
 - `POST /api/commercial-offers/:id/follow-up`
 
 Approval intake moves a draft offer to `PENDING_APPROVAL` and creates one pending approval record. Approval decisions remain deferred to the next milestone, which can now enforce them through the authenticated identity boundary. This milestone also excludes Telegram, PDF generation, email delivery, frontend applications, AI integrations, and microservices.
 
 Roles are `ADMIN`, `MANAGER`, `SALES`, and `ACCOUNTANT`. Admin, Manager, and Sales may operate leads and offers. Accountants may read commercial offers. Only Admin may manage users. Role changes take effect immediately, deactivation invalidates existing tokens, and the last active administrator cannot be removed or demoted.
+
+Railway and Telegram deployment instructions are in [`docs/deployment/railway.md`](docs/deployment/railway.md). Telegram commands and local startup are documented in [`telegram/README.md`](telegram/README.md).
 
 ## Status
 

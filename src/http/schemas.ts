@@ -57,3 +57,10 @@ export const updateUserSchema = z.object({
   role: z.enum(ROLES).optional(),
   active: z.boolean().optional(),
 }).strict().refine((value) => Object.keys(value).length > 0, "At least one field is required");
+
+export const telegramAuditSchema = z.object({
+  updateId: z.int().nonnegative(),
+  telegramUserId: z.string().regex(/^\d+$/),
+  command: z.string().trim().min(1).max(100),
+  allowed: z.boolean(),
+}).strict();

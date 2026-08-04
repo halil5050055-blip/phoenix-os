@@ -9,7 +9,9 @@
   },
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "start": "tsx src/server.ts",
+    "start": "node dist/src/server.js",
+    "telegram:dev": "tsx src/telegram/server.ts",
+    "telegram:start": "node dist/src/telegram/server.js",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
@@ -17,6 +19,7 @@
   },
   "dependencies": {
     "express": "^5.1.0",
+    "grammy": "^1.45.1",
     "jose": "^6.2.8",
     "zod": "^4.0.0"
   },

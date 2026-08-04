@@ -162,6 +162,10 @@ describe("Phoenix BOS Vertical 1 API", () => {
   });
 
   it("requires authentication and rejects invalid credentials", async () => {
+    const health = await request(app).get("/health");
+    expect(health.status).toBe(200);
+    expect(health.body.status).toBe("ok");
+
     const unauthenticated = await request(app).get("/api/leads");
     expect(unauthenticated.status).toBe(401);
     expect(unauthenticated.body.error.code).toBe("UNAUTHORIZED");
@@ -233,6 +237,32 @@ describe("Phoenix BOS Vertical 1 API", () => {
     const adminId = users.body.data[0].id as string;
     const response = await remove(`/api/users/${adminId}`).set("Idempotency-Key", "self-deactivate");
     expect(response.status).toBe(403);
+  });
+
+  it("lists canonical offer/task data and audits Telegram commands", async () => {
+    const lead = await post("/api/leads").set("Idempotency-Key", "telegram-read-lead").send({ companyName: "Telegram Client" });
+    await post(`/api/leads/${lead.body.id}/qualify`).set("Idempotency-Key", "telegram-read-qualify").send({});
+    const conversion = await post(`/api/leads/${lead.body.id}/convert`).set("Idempotency-Key", "telegram-read-convert").send({});
+    const offer = await post("/api/commercial-offers").set("Idempotency-Key", "telegram-read-offer").send({
+      clientId: conversion.body.client.id,
+      currency: "EUR",
+      items: [{ description: "Service", quantity: 1, unitPriceMinor: 10_000 }],
+    });
+    await post(`/api/commercial-offers/${offer.body.id}/follow-up`).set("Idempotency-Key", "telegram-read-task").send({ dueAt: "2030-01-01T10:00:00.000Z" });
+
+    expect((await get("/api/commercial-offers")).body.data).toHaveLength(1);
+    expect((await get("/api/tasks")).body.data).toHaveLength(1);
+
+    const audit = await post("/api/integrations/telegram/audit")
+      .set("Idempotency-Key", "telegram-42-status")
+      .send({ updateId: 42, telegramUserId: "123456789", command: "/status", allowed: true });
+    expect(audit.status).toBe(201);
+    const recorded = database.prepare(`
+      SELECT action, entity_type, entity_id, actor_id FROM audit_events
+      WHERE action = 'TELEGRAM_COMMAND_RECEIVED'
+    `).get() as { action: string; entity_type: string; entity_id: string; actor_id: string };
+    expect(recorded).toMatchObject({ action: "TELEGRAM_COMMAND_RECEIVED", entity_type: "TELEGRAM_USER", entity_id: "123456789" });
+    expect(recorded.actor_id).toBeTruthy();
   });
 
   it("enforces state and monetary invariants in SQLite", () => {

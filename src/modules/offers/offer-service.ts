@@ -26,6 +26,11 @@ interface OfferRow {
 export class OfferService {
   constructor(private readonly database: Database) {}
 
+  list() {
+    const rows = this.database.prepare("SELECT id FROM commercial_offers ORDER BY created_at DESC LIMIT 100").all() as Array<{ id: string }>;
+    return rows.map((row) => this.get(row.id));
+  }
+
   create(input: OfferInput, context: CommandContext) {
     const client = this.database.prepare("SELECT id FROM clients WHERE id = ?").get(input.clientId);
     if (!client) throw new NotFoundError("Client");
