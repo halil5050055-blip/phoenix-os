@@ -21,15 +21,22 @@ function stableStringify(value: unknown): string {
 export class CommandExecutor {
   constructor(private readonly database: Database) {}
 
-  execute<T>(commandName: string, key: string, payload: unknown, handler: (context: CommandContext) => { body: T; statusCode: number }): CommandResult<T> {
+  execute<T>(
+    commandName: string,
+    key: string,
+    payload: unknown,
+    actor: Pick<CommandContext, "actorId" | "actorType">,
+    handler: (context: CommandContext) => { body: T; statusCode: number },
+  ): CommandResult<T> {
     const requestHash = createHash("sha256").update(stableStringify(payload)).digest("hex");
-    const context = { commandId: randomUUID(), commandName };
+    const context = { commandId: randomUUID(), commandName, ...actor };
+    const actorScope = actor.actorId ?? "SYSTEM";
     this.database.exec("BEGIN IMMEDIATE");
     try {
       const existing = this.database.prepare(`
         SELECT request_hash, response_json, status_code
-        FROM idempotency_records WHERE command_name = ? AND idempotency_key = ?
-      `).get(commandName, key) as { request_hash: string; response_json: string; status_code: number } | undefined;
+        FROM idempotency_records WHERE command_name = ? AND actor_id = ? AND idempotency_key = ?
+      `).get(commandName, actorScope, key) as { request_hash: string; response_json: string; status_code: number } | undefined;
 
       if (existing) {
         if (existing.request_hash !== requestHash) {
@@ -42,9 +49,9 @@ export class CommandExecutor {
       const result = handler(context);
       this.database.prepare(`
         INSERT INTO idempotency_records
-          (command_name, idempotency_key, request_hash, response_json, status_code, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(commandName, key, requestHash, JSON.stringify(result.body), result.statusCode, new Date().toISOString());
+          (command_name, actor_id, idempotency_key, request_hash, response_json, status_code, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(commandName, actorScope, key, requestHash, JSON.stringify(result.body), result.statusCode, new Date().toISOString());
 
       this.database.exec("COMMIT");
       return { ...result, replayed: false };

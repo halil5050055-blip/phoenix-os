@@ -53,15 +53,27 @@ The Vertical 1 backend is a Node.js 24 and TypeScript modular monolith using SQL
 ```bash
 npm install
 npm test
+JWT_SECRET="replace-with-at-least-32-random-bytes" \
+INITIAL_ADMIN_EMAIL="admin@example.com" \
+INITIAL_ADMIN_PASSWORD="replace-with-a-strong-password" \
 npm start
 ```
 
-The API listens only on `http://127.0.0.1:3000` by default and stores local data in `data/phoenix-bos.sqlite` with owner-only permissions. Set `PORT`, `HOST`, or `DATABASE_PATH` to override those defaults. Setting `HOST` to a non-loopback address exposes the unauthenticated API and is unsafe unless an access-controlled reverse proxy protects it. Every `POST` endpoint requires an `Idempotency-Key` header. Monetary amounts are integer minor units; for example, `12500` represents EUR 125.00. Percentage discounts use integer basis points and round down to the nearest minor unit.
+The API listens only on `http://127.0.0.1:3000` by default and stores local data in `data/phoenix-bos.sqlite` with owner-only permissions. `JWT_SECRET` is always required and must contain at least 32 UTF-8 bytes. On an empty database, `INITIAL_ADMIN_EMAIL` and an `INITIAL_ADMIN_PASSWORD` of at least 12 characters are required; they are ignored after the first user exists. Set `INITIAL_ADMIN_NAME`, `PORT`, `HOST`, or `DATABASE_PATH` to override their defaults. Setting `HOST` to a non-loopback address requires transport security and appropriate network controls.
+
+All endpoints except login require `Authorization: Bearer <token>`. Logout revokes the presented JWT immediately. Business commands and user mutations also require an `Idempotency-Key` header, scoped to the authenticated user. Monetary amounts are integer minor units; for example, `12500` represents EUR 125.00. Percentage discounts use integer basis points and round down to the nearest minor unit.
 
 Successful business commands atomically persist state changes, domain events, audit events, and idempotency responses. Rejected business commands are recorded in the audit log without retaining their request body.
 
 Available endpoints:
 
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `POST /api/users` — Admin
+- `GET /api/users` — Admin
+- `GET /api/users/:id` — Admin
+- `PATCH /api/users/:id` — Admin
+- `DELETE /api/users/:id` — Admin; deactivates rather than erases
 - `POST /api/leads`
 - `GET /api/leads`
 - `POST /api/leads/:id/qualify`
@@ -71,7 +83,9 @@ Available endpoints:
 - `POST /api/commercial-offers/:id/submit-for-approval`
 - `POST /api/commercial-offers/:id/follow-up`
 
-Approval intake moves a draft offer to `PENDING_APPROVAL` and creates one pending approval record. Approval decisions are intentionally deferred until an identity-backed decision boundary exists. This milestone also excludes Telegram, PDF generation, email delivery, frontend applications, AI integrations, and microservices.
+Approval intake moves a draft offer to `PENDING_APPROVAL` and creates one pending approval record. Approval decisions remain deferred to the next milestone, which can now enforce them through the authenticated identity boundary. This milestone also excludes Telegram, PDF generation, email delivery, frontend applications, AI integrations, and microservices.
+
+Roles are `ADMIN`, `MANAGER`, `SALES`, and `ACCOUNTANT`. Admin, Manager, and Sales may operate leads and offers. Accountants may read commercial offers. Only Admin may manage users. Role changes take effect immediately, deactivation invalidates existing tokens, and the last active administrator cannot be removed or demoted.
 
 ## Status
 

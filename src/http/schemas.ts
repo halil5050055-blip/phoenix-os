@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ROLES } from "../modules/users/user-service.js";
 
 const trimmed = z.string().trim().min(1).max(200);
 const optionalTrimmed = z.string().trim().min(1).max(500).optional();
@@ -36,3 +37,23 @@ export const followUpSchema = z.object({
 export const submitForApprovalSchema = z.object({
   reason: optionalTrimmed,
 }).strict();
+
+const email = z.email().max(254).transform((value) => value.trim().toLowerCase());
+const password = z.string().min(12).max(128);
+
+export const loginSchema = z.object({ email, password: z.string().min(1).max(128) }).strict();
+
+export const createUserSchema = z.object({
+  email,
+  displayName: trimmed,
+  password,
+  role: z.enum(ROLES),
+}).strict();
+
+export const updateUserSchema = z.object({
+  email: email.optional(),
+  displayName: trimmed.optional(),
+  password: password.optional(),
+  role: z.enum(ROLES).optional(),
+  active: z.boolean().optional(),
+}).strict().refine((value) => Object.keys(value).length > 0, "At least one field is required");

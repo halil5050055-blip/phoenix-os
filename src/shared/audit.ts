@@ -4,6 +4,8 @@ import type { Database } from "./database.js";
 export interface CommandContext {
   commandId: string;
   commandName: string;
+  actorId: string | null;
+  actorType: "SYSTEM" | "USER";
 }
 
 export function recordAuditEvent(
@@ -16,9 +18,9 @@ export function recordAuditEvent(
 ): void {
   database.prepare(`
     INSERT INTO audit_events
-      (id, action, entity_type, entity_id, actor_type, payload_json, created_at, command_id, command_name)
-    VALUES (?, ?, ?, ?, 'SYSTEM', ?, ?, ?, ?)
-  `).run(randomUUID(), action, entityType, entityId, JSON.stringify(payload), new Date().toISOString(), context.commandId, context.commandName);
+      (id, action, entity_type, entity_id, actor_type, payload_json, created_at, command_id, command_name, actor_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(randomUUID(), action, entityType, entityId, context.actorType, JSON.stringify(payload), new Date().toISOString(), context.commandId, context.commandName, context.actorId);
 }
 
 export function recordDomainEvent(
