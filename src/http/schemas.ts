@@ -32,3 +32,7 @@ export const followUpSchema = z.object({
   dueAt: z.iso.datetime(),
   notes: optionalTrimmed,
 }).strict();
+
+export const submitForApprovalSchema = z.object({
+  reason: optionalTrimmed,
+}).strict();

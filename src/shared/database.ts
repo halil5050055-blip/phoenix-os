@@ -10,7 +10,7 @@ export function createDatabase(filename: string, migrationsDirectory = join(proc
   database.exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;");
 
   let version = (database.prepare("PRAGMA user_version").get() as { user_version: number }).user_version;
-  for (const migration of ["001_initial.sql", "002_hardening.sql"]) {
+  for (const migration of ["001_initial.sql", "002_hardening.sql", "003_offer_approval_intake.sql"]) {
     const targetVersion = Number.parseInt(migration.slice(0, 3), 10);
     if (version < targetVersion) {
       database.exec(readFileSync(join(migrationsDirectory, migration), "utf8"));

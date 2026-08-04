@@ -14,7 +14,7 @@ interface OfferRow {
   id: string;
   client_id: string;
   price_policy_id: string | null;
-  status: "DRAFT";
+  status: "DRAFT" | "PENDING_APPROVAL";
   currency: string;
   subtotal_minor: number;
   discount_minor: number;
@@ -86,6 +86,10 @@ export class OfferService {
       SELECT id, product_id, description, quantity, unit_price_minor, line_total_minor
       FROM commercial_offer_items WHERE commercial_offer_id = ? ORDER BY rowid
     `).all(id) as Array<Record<string, unknown>>;
+    const approval = this.database.prepare(`
+      SELECT id, status, request_reason, requested_at
+      FROM offer_approvals WHERE commercial_offer_id = ?
+    `).get(id) as { id: string; status: "PENDING"; request_reason: string | null; requested_at: string } | undefined;
     return {
       id: offer.id,
       clientId: offer.client_id,
@@ -97,6 +101,12 @@ export class OfferService {
       totalMinor: offer.total_minor,
       createdAt: offer.created_at,
       updatedAt: offer.updated_at,
+      approval: approval ? {
+        id: approval.id,
+        status: approval.status,
+        requestReason: approval.request_reason,
+        requestedAt: approval.requested_at,
+      } : null,
       items: items.map((item) => ({
         id: item.id,
         productId: item.product_id,
@@ -106,6 +116,27 @@ export class OfferService {
         lineTotalMinor: item.line_total_minor,
       })),
     };
+  }
+
+  submitForApproval(id: string, reason: string | undefined, context: CommandContext) {
+    const offer = this.get(id);
+    if (offer.status !== "DRAFT") {
+      throw new ConflictError("INVALID_OFFER_STATE", `Only DRAFT offers can be submitted for approval; current status is ${offer.status}`);
+    }
+
+    const approvalId = randomUUID();
+    const now = new Date().toISOString();
+    this.database.prepare(`
+      INSERT INTO offer_approvals (id, commercial_offer_id, status, request_reason, requested_at)
+      VALUES (?, ?, 'PENDING', ?, ?)
+    `).run(approvalId, id, reason ?? null, now);
+
+    const approvalPayload = { commercialOfferId: id, requestReason: reason ?? null, requestedAt: now };
+    recordDomainEvent(this.database, "OFFER_APPROVAL_REQUESTED", "OFFER_APPROVAL", approvalId, approvalPayload, context);
+    recordDomainEvent(this.database, "COMMERCIAL_OFFER_SUBMITTED_FOR_APPROVAL", "COMMERCIAL_OFFER", id, { approvalId }, context);
+    recordAuditEvent(this.database, "OFFER_APPROVAL_REQUESTED", "OFFER_APPROVAL", approvalId, approvalPayload, context);
+    recordAuditEvent(this.database, "COMMERCIAL_OFFER_SUBMITTED_FOR_APPROVAL", "COMMERCIAL_OFFER", id, { approvalId }, context);
+    return this.get(id);
   }
 
   createFollowUp(id: string, dueAt: string, notes: string | undefined, context: CommandContext) {

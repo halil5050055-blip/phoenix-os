@@ -77,6 +77,52 @@ describe("Phoenix BOS Vertical 1 API", () => {
     expect(followUp.body).toMatchObject({ type: "FOLLOW_UP", status: "OPEN", relatedEntityId: offer.body.id });
   });
 
+  it("submits a draft offer for approval exactly once", async () => {
+    const lead = await request(app).post("/api/leads").set("Idempotency-Key", "approval-lead").send({ companyName: "Approval Client" });
+    await request(app).post(`/api/leads/${lead.body.id}/qualify`).set("Idempotency-Key", "approval-qualify").send({});
+    const conversion = await request(app).post(`/api/leads/${lead.body.id}/convert`).set("Idempotency-Key", "approval-convert").send({});
+    const offer = await request(app).post("/api/commercial-offers").set("Idempotency-Key", "approval-offer").send({
+      clientId: conversion.body.client.id,
+      currency: "EUR",
+      items: [{ description: "Implementation", quantity: 1, unitPriceMinor: 75_000 }],
+    });
+
+    const submitted = await request(app)
+      .post(`/api/commercial-offers/${offer.body.id}/submit-for-approval`)
+      .set("Idempotency-Key", "approval-submit")
+      .send({ reason: "Commercial review required" });
+    expect(submitted.status).toBe(201);
+    expect(submitted.body).toMatchObject({
+      status: "PENDING_APPROVAL",
+      approval: { status: "PENDING", requestReason: "Commercial review required" },
+    });
+
+    const replay = await request(app)
+      .post(`/api/commercial-offers/${offer.body.id}/submit-for-approval`)
+      .set("Idempotency-Key", "approval-submit")
+      .send({ reason: "Commercial review required" });
+    expect(replay.status).toBe(201);
+    expect(replay.headers["idempotency-replayed"]).toBe("true");
+    expect(replay.body.approval.id).toBe(submitted.body.approval.id);
+
+    const duplicate = await request(app)
+      .post(`/api/commercial-offers/${offer.body.id}/submit-for-approval`)
+      .set("Idempotency-Key", "approval-submit-again")
+      .send({});
+    expect(duplicate.status).toBe(409);
+    expect(duplicate.body.error.code).toBe("INVALID_OFFER_STATE");
+
+    const approvalCount = database.prepare("SELECT COUNT(*) AS count FROM offer_approvals").get() as { count: number };
+    expect(approvalCount.count).toBe(1);
+    expect(() => database.prepare("DELETE FROM offer_approvals WHERE commercial_offer_id = ?").run(offer.body.id)).toThrow();
+    expect(() => database.prepare("UPDATE commercial_offers SET status = 'DRAFT' WHERE id = ?").run(offer.body.id)).toThrow();
+    const approvalEvents = database.prepare(`
+      SELECT COUNT(*) AS count FROM domain_events
+      WHERE command_id = (SELECT command_id FROM domain_events WHERE event_type = 'OFFER_APPROVAL_REQUESTED')
+    `).get() as { count: number };
+    expect(approvalEvents.count).toBe(2);
+  });
+
   it("rejects invalid transitions and idempotency key reuse", async () => {
     const lead = await request(app).post("/api/leads").set("Idempotency-Key", "lead-3").send({ companyName: "One" });
     const invalidConversion = await request(app).post(`/api/leads/${lead.body.id}/convert`).set("Idempotency-Key", "convert-invalid").send({});

@@ -48,7 +48,7 @@ The project treats documentation and memory as first-class infrastructure. Decis
 
 ## Vertical 1 Backend
 
-The first working backend slice is a Node.js 24 and TypeScript modular monolith using SQLite. It supports lead intake and qualification, conversion to a client, deterministic commercial-offer drafts, follow-up tasks, idempotent commands, and audit events.
+The Vertical 1 backend is a Node.js 24 and TypeScript modular monolith using SQLite. It supports lead intake and qualification, conversion to a client, deterministic commercial-offer drafts, approval intake, follow-up tasks, idempotent commands, domain events, and audit events.
 
 ```bash
 npm install
@@ -68,9 +68,10 @@ Available endpoints:
 - `POST /api/leads/:id/convert`
 - `POST /api/commercial-offers`
 - `GET /api/commercial-offers/:id`
+- `POST /api/commercial-offers/:id/submit-for-approval`
 - `POST /api/commercial-offers/:id/follow-up`
 
-This milestone intentionally excludes authentication, Telegram, PDF generation, email delivery, frontend applications, AI integrations, and microservices.
+Approval intake moves a draft offer to `PENDING_APPROVAL` and creates one pending approval record. Approval decisions are intentionally deferred until an identity-backed decision boundary exists. This milestone also excludes Telegram, PDF generation, email delivery, frontend applications, AI integrations, and microservices.
 
 ## Status
 

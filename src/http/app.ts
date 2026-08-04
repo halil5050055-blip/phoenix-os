@@ -5,7 +5,7 @@ import { AppError } from "../shared/errors.js";
 import { CommandExecutor } from "../shared/idempotency.js";
 import { LeadService } from "../modules/leads/lead-service.js";
 import { OfferService } from "../modules/offers/offer-service.js";
-import { convertLeadSchema, createLeadSchema, createOfferSchema, followUpSchema, qualifyLeadSchema } from "./schemas.js";
+import { convertLeadSchema, createLeadSchema, createOfferSchema, followUpSchema, qualifyLeadSchema, submitForApprovalSchema } from "./schemas.js";
 
 function validate(schema: ZodType, value: unknown): unknown {
   const result = schema.safeParse(value);
@@ -54,6 +54,16 @@ export function createApp(database: Database) {
   });
 
   app.get("/api/commercial-offers/:id", (request, response) => response.json(offers.get(request.params.id!)));
+
+  app.post("/api/commercial-offers/:id/submit-for-approval", (request, response) => {
+    const body = validate(submitForApprovalSchema, request.body) as { reason?: string };
+    const payload = { id: request.params.id, ...body };
+    const result = commands.execute("SUBMIT_COMMERCIAL_OFFER_FOR_APPROVAL", idempotencyKey(request), payload, (context) => ({
+      body: offers.submitForApproval(request.params.id!, body.reason, context),
+      statusCode: 201,
+    }));
+    response.status(result.statusCode).set("Idempotency-Replayed", String(result.replayed)).json(result.body);
+  });
 
   app.post("/api/commercial-offers/:id/follow-up", (request, response) => {
     const body = validate(followUpSchema, request.body) as { dueAt: string; notes?: string };
