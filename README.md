@@ -56,7 +56,9 @@ npm test
 npm start
 ```
 
-The API listens on `http://localhost:3000` and stores local data in `data/phoenix-bos.sqlite`. Set `PORT` or `DATABASE_PATH` to override those defaults. Every `POST` endpoint requires an `Idempotency-Key` header. Monetary amounts are integer minor units; for example, `12500` represents EUR 125.00. Percentage discounts use integer basis points and round down to the nearest minor unit.
+The API listens only on `http://127.0.0.1:3000` by default and stores local data in `data/phoenix-bos.sqlite` with owner-only permissions. Set `PORT`, `HOST`, or `DATABASE_PATH` to override those defaults. Setting `HOST` to a non-loopback address exposes the unauthenticated API and is unsafe unless an access-controlled reverse proxy protects it. Every `POST` endpoint requires an `Idempotency-Key` header. Monetary amounts are integer minor units; for example, `12500` represents EUR 125.00. Percentage discounts use integer basis points and round down to the nearest minor unit.
+
+Successful business commands atomically persist state changes, domain events, audit events, and idempotency responses. Rejected business commands are recorded in the audit log without retaining their request body.
 
 Available endpoints:
 

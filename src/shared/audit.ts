@@ -1,15 +1,37 @@
 import { randomUUID } from "node:crypto";
 import type { Database } from "./database.js";
 
+export interface CommandContext {
+  commandId: string;
+  commandName: string;
+}
+
 export function recordAuditEvent(
   database: Database,
   action: string,
   entityType: string,
   entityId: string,
   payload: unknown,
+  context: CommandContext,
 ): void {
   database.prepare(`
-    INSERT INTO audit_events (id, action, entity_type, entity_id, actor_type, payload_json, created_at)
-    VALUES (?, ?, ?, ?, 'SYSTEM', ?, ?)
-  `).run(randomUUID(), action, entityType, entityId, JSON.stringify(payload), new Date().toISOString());
+    INSERT INTO audit_events
+      (id, action, entity_type, entity_id, actor_type, payload_json, created_at, command_id, command_name)
+    VALUES (?, ?, ?, ?, 'SYSTEM', ?, ?, ?, ?)
+  `).run(randomUUID(), action, entityType, entityId, JSON.stringify(payload), new Date().toISOString(), context.commandId, context.commandName);
+}
+
+export function recordDomainEvent(
+  database: Database,
+  eventType: string,
+  aggregateType: string,
+  aggregateId: string,
+  payload: unknown,
+  context: CommandContext,
+): void {
+  database.prepare(`
+    INSERT INTO domain_events
+      (id, event_type, aggregate_type, aggregate_id, command_id, payload_json, occurred_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(randomUUID(), eventType, aggregateType, aggregateId, context.commandId, JSON.stringify(payload), new Date().toISOString());
 }

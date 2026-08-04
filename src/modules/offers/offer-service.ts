@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Database } from "../../shared/database.js";
-import { recordAuditEvent } from "../../shared/audit.js";
+import { recordAuditEvent, recordDomainEvent, type CommandContext } from "../../shared/audit.js";
 import { ConflictError, NotFoundError } from "../../shared/errors.js";
 
 export interface OfferInput {
@@ -26,7 +26,7 @@ interface OfferRow {
 export class OfferService {
   constructor(private readonly database: Database) {}
 
-  create(input: OfferInput) {
+  create(input: OfferInput, context: CommandContext) {
     const client = this.database.prepare("SELECT id FROM clients WHERE id = ?").get(input.clientId);
     if (!client) throw new NotFoundError("Client");
 
@@ -71,9 +71,11 @@ export class OfferService {
     for (const item of input.items) {
       insertItem.run(randomUUID(), id, item.productId ?? null, item.description, item.quantity, item.unitPriceMinor, item.quantity * item.unitPriceMinor);
     }
-    recordAuditEvent(this.database, "COMMERCIAL_OFFER_DRAFT_CREATED", "COMMERCIAL_OFFER", id, {
+    const eventPayload = {
       clientId: input.clientId, subtotalMinor, discountMinor, totalMinor, currency: input.currency,
-    });
+    };
+    recordDomainEvent(this.database, "COMMERCIAL_OFFER_DRAFT_CREATED", "COMMERCIAL_OFFER", id, eventPayload, context);
+    recordAuditEvent(this.database, "COMMERCIAL_OFFER_DRAFT_CREATED", "COMMERCIAL_OFFER", id, eventPayload, context);
     return this.get(id);
   }
 
@@ -106,7 +108,7 @@ export class OfferService {
     };
   }
 
-  createFollowUp(id: string, dueAt: string, notes?: string) {
+  createFollowUp(id: string, dueAt: string, notes: string | undefined, context: CommandContext) {
     this.get(id);
     const taskId = randomUUID();
     const now = new Date().toISOString();
@@ -114,7 +116,9 @@ export class OfferService {
       INSERT INTO tasks (id, type, status, related_entity_type, related_entity_id, due_at, notes, created_at)
       VALUES (?, 'FOLLOW_UP', 'OPEN', 'COMMERCIAL_OFFER', ?, ?, ?, ?)
     `).run(taskId, id, dueAt, notes ?? null, now);
-    recordAuditEvent(this.database, "FOLLOW_UP_TASK_CREATED", "TASK", taskId, { commercialOfferId: id, dueAt });
+    const eventPayload = { commercialOfferId: id, dueAt };
+    recordDomainEvent(this.database, "FOLLOW_UP_TASK_CREATED", "TASK", taskId, eventPayload, context);
+    recordAuditEvent(this.database, "FOLLOW_UP_TASK_CREATED", "TASK", taskId, eventPayload, context);
     return { id: taskId, type: "FOLLOW_UP", status: "OPEN", relatedEntityType: "COMMERCIAL_OFFER", relatedEntityId: id, dueAt, notes: notes ?? null, createdAt: now };
   }
 }

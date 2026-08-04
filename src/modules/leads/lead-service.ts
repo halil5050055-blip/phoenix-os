@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Database } from "../../shared/database.js";
-import { recordAuditEvent } from "../../shared/audit.js";
+import { recordAuditEvent, recordDomainEvent, type CommandContext } from "../../shared/audit.js";
 import { ConflictError, NotFoundError } from "../../shared/errors.js";
 
 export interface ContactInput {
@@ -71,7 +71,7 @@ const leadSelect = `
 export class LeadService {
   constructor(private readonly database: Database) {}
 
-  create(input: LeadInput): Lead {
+  create(input: LeadInput, context: CommandContext): Lead {
     const now = new Date().toISOString();
     const leadId = randomUUID();
     let contactId: string | null = null;
@@ -88,7 +88,9 @@ export class LeadService {
       INSERT INTO leads (id, company_name, contact_id, status, created_at, updated_at)
       VALUES (?, ?, ?, 'NEW', ?, ?)
     `).run(leadId, input.companyName, contactId, now, now);
-    recordAuditEvent(this.database, "LEAD_CREATED", "LEAD", leadId, { companyName: input.companyName, contactId });
+    const eventPayload = { companyName: input.companyName, contactId };
+    recordDomainEvent(this.database, "LEAD_CREATED", "LEAD", leadId, eventPayload, context);
+    recordAuditEvent(this.database, "LEAD_CREATED", "LEAD", leadId, eventPayload, context);
     return this.get(leadId);
   }
 
@@ -102,7 +104,7 @@ export class LeadService {
     return mapLead(row);
   }
 
-  qualify(id: string, notes?: string): Lead {
+  qualify(id: string, notes: string | undefined, context: CommandContext): Lead {
     const lead = this.get(id);
     if (lead.status !== "NEW") {
       throw new ConflictError("INVALID_LEAD_STATE", `Only NEW leads can be qualified; current status is ${lead.status}`);
@@ -111,11 +113,13 @@ export class LeadService {
     this.database.prepare(`
       UPDATE leads SET status = 'QUALIFIED', qualification_notes = ?, qualified_at = ?, updated_at = ? WHERE id = ?
     `).run(notes ?? null, now, now, id);
-    recordAuditEvent(this.database, "LEAD_QUALIFIED", "LEAD", id, { notes: notes ?? null });
+    const eventPayload = { notes: notes ?? null, qualifiedAt: now };
+    recordDomainEvent(this.database, "LEAD_QUALIFIED", "LEAD", id, eventPayload, context);
+    recordAuditEvent(this.database, "LEAD_QUALIFIED", "LEAD", id, eventPayload, context);
     return this.get(id);
   }
 
-  convert(id: string): { lead: Lead; client: { id: string; name: string; primaryContactId: string | null; sourceLeadId: string; createdAt: string } } {
+  convert(id: string, context: CommandContext): { lead: Lead; client: { id: string; name: string; primaryContactId: string | null; sourceLeadId: string; createdAt: string } } {
     const lead = this.get(id);
     if (lead.status !== "QUALIFIED") {
       throw new ConflictError("INVALID_LEAD_STATE", `Only QUALIFIED leads can be converted; current status is ${lead.status}`);
@@ -127,8 +131,10 @@ export class LeadService {
       VALUES (?, ?, ?, ?, ?)
     `).run(clientId, lead.companyName, lead.contact?.id ?? null, id, now);
     this.database.prepare(`UPDATE leads SET status = 'CONVERTED', client_id = ?, updated_at = ? WHERE id = ?`).run(clientId, now, id);
-    recordAuditEvent(this.database, "LEAD_CONVERTED", "LEAD", id, { clientId });
-    recordAuditEvent(this.database, "CLIENT_CREATED", "CLIENT", clientId, { sourceLeadId: id });
+    recordDomainEvent(this.database, "CLIENT_CREATED", "CLIENT", clientId, { sourceLeadId: id }, context);
+    recordDomainEvent(this.database, "LEAD_CONVERTED", "LEAD", id, { clientId }, context);
+    recordAuditEvent(this.database, "CLIENT_CREATED", "CLIENT", clientId, { sourceLeadId: id }, context);
+    recordAuditEvent(this.database, "LEAD_CONVERTED", "LEAD", id, { clientId }, context);
     return {
       lead: this.get(id),
       client: { id: clientId, name: lead.companyName, primaryContactId: lead.contact?.id ?? null, sourceLeadId: id, createdAt: now },

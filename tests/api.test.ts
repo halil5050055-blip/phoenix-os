@@ -46,6 +46,10 @@ describe("Phoenix BOS Vertical 1 API", () => {
 
     const auditCount = database.prepare("SELECT COUNT(*) AS count FROM audit_events").get() as { count: number };
     expect(auditCount.count).toBe(4);
+    const domainEventCount = database.prepare("SELECT COUNT(*) AS count FROM domain_events").get() as { count: number };
+    expect(domainEventCount.count).toBe(4);
+    const uncorrelatedAuditCount = database.prepare("SELECT COUNT(*) AS count FROM audit_events WHERE command_id IS NULL").get() as { count: number };
+    expect(uncorrelatedAuditCount.count).toBe(0);
   });
 
   it("creates a deterministic commercial offer and follow-up task", async () => {
@@ -78,6 +82,8 @@ describe("Phoenix BOS Vertical 1 API", () => {
     const invalidConversion = await request(app).post(`/api/leads/${lead.body.id}/convert`).set("Idempotency-Key", "convert-invalid").send({});
     expect(invalidConversion.status).toBe(409);
     expect(invalidConversion.body.error.code).toBe("INVALID_LEAD_STATE");
+    const rejected = database.prepare("SELECT action, command_name FROM audit_events WHERE action = 'COMMAND_REJECTED'").get() as { action: string; command_name: string };
+    expect(rejected).toEqual({ action: "COMMAND_REJECTED", command_name: "CONVERT_LEAD" });
 
     const reused = await request(app).post("/api/leads").set("Idempotency-Key", "lead-3").send({ companyName: "Different" });
     expect(reused.status).toBe(409);
@@ -87,5 +93,37 @@ describe("Phoenix BOS Vertical 1 API", () => {
   it("validates inputs and requires idempotency keys", async () => {
     expect((await request(app).post("/api/leads").send({ companyName: "Acme" })).status).toBe(400);
     expect((await request(app).post("/api/leads").set("Idempotency-Key", "bad").send({ companyName: "" })).status).toBe(400);
+  });
+
+  it("returns a client error for malformed JSON", async () => {
+    const response = await request(app)
+      .post("/api/leads")
+      .set("Content-Type", "application/json")
+      .set("Idempotency-Key", "malformed")
+      .send('{"companyName":');
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe("MALFORMED_JSON");
+  });
+
+  it("enforces state and monetary invariants in SQLite", () => {
+    const now = new Date().toISOString();
+    expect(() => database.prepare(`
+      INSERT INTO leads (id, company_name, status, created_at, updated_at)
+      VALUES ('invalid-lead', 'Invalid', 'QUALIFIED', ?, ?)
+    `).run(now, now)).toThrow();
+
+    database.prepare(`
+      INSERT INTO leads (id, company_name, status, created_at, updated_at)
+      VALUES ('lead', 'Client', 'NEW', ?, ?)
+    `).run(now, now);
+    database.prepare(`
+      INSERT INTO clients (id, name, source_lead_id, created_at)
+      VALUES ('client', 'Client', 'lead', ?)
+    `).run(now);
+    expect(() => database.prepare(`
+      INSERT INTO commercial_offers
+        (id, client_id, status, currency, subtotal_minor, discount_minor, total_minor, created_at, updated_at)
+      VALUES ('offer', 'client', 'DRAFT', 'EUR', 100, 10, 100, ?, ?)
+    `).run(now, now)).toThrow();
   });
 });

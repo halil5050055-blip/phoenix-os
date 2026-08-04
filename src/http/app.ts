@@ -28,7 +28,7 @@ export function createApp(database: Database) {
 
   app.post("/api/leads", (request, response) => {
     const body = validate(createLeadSchema, request.body) as Parameters<typeof leads.create>[0];
-    const result = commands.execute("CREATE_LEAD", idempotencyKey(request), body, () => ({ body: leads.create(body), statusCode: 201 }));
+    const result = commands.execute("CREATE_LEAD", idempotencyKey(request), body, (context) => ({ body: leads.create(body, context), statusCode: 201 }));
     response.status(result.statusCode).set("Idempotency-Replayed", String(result.replayed)).json(result.body);
   });
 
@@ -36,20 +36,20 @@ export function createApp(database: Database) {
 
   app.post("/api/leads/:id/qualify", (request, response) => {
     const body = validate(qualifyLeadSchema, request.body) as { notes?: string };
-    const result = commands.execute("QUALIFY_LEAD", idempotencyKey(request), { id: request.params.id, ...body }, () => ({ body: leads.qualify(request.params.id!, body.notes), statusCode: 200 }));
+    const result = commands.execute("QUALIFY_LEAD", idempotencyKey(request), { id: request.params.id, ...body }, (context) => ({ body: leads.qualify(request.params.id!, body.notes, context), statusCode: 200 }));
     response.set("Idempotency-Replayed", String(result.replayed)).json(result.body);
   });
 
   app.post("/api/leads/:id/convert", (request, response) => {
     validate(convertLeadSchema, request.body);
     const payload = { id: request.params.id };
-    const result = commands.execute("CONVERT_LEAD", idempotencyKey(request), payload, () => ({ body: leads.convert(request.params.id!), statusCode: 201 }));
+    const result = commands.execute("CONVERT_LEAD", idempotencyKey(request), payload, (context) => ({ body: leads.convert(request.params.id!, context), statusCode: 201 }));
     response.status(result.statusCode).set("Idempotency-Replayed", String(result.replayed)).json(result.body);
   });
 
   app.post("/api/commercial-offers", (request, response) => {
     const body = validate(createOfferSchema, request.body) as Parameters<typeof offers.create>[0];
-    const result = commands.execute("CREATE_COMMERCIAL_OFFER", idempotencyKey(request), body, () => ({ body: offers.create(body), statusCode: 201 }));
+    const result = commands.execute("CREATE_COMMERCIAL_OFFER", idempotencyKey(request), body, (context) => ({ body: offers.create(body, context), statusCode: 201 }));
     response.status(result.statusCode).set("Idempotency-Replayed", String(result.replayed)).json(result.body);
   });
 
@@ -58,7 +58,7 @@ export function createApp(database: Database) {
   app.post("/api/commercial-offers/:id/follow-up", (request, response) => {
     const body = validate(followUpSchema, request.body) as { dueAt: string; notes?: string };
     const payload = { id: request.params.id, ...body };
-    const result = commands.execute("CREATE_FOLLOW_UP", idempotencyKey(request), payload, () => ({ body: offers.createFollowUp(request.params.id!, body.dueAt, body.notes), statusCode: 201 }));
+    const result = commands.execute("CREATE_FOLLOW_UP", idempotencyKey(request), payload, (context) => ({ body: offers.createFollowUp(request.params.id!, body.dueAt, body.notes, context), statusCode: 201 }));
     response.status(result.statusCode).set("Idempotency-Replayed", String(result.replayed)).json(result.body);
   });
 
@@ -66,6 +66,14 @@ export function createApp(database: Database) {
   app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
     if (error instanceof AppError) {
       response.status(error.statusCode).json({ error: { code: error.code, message: error.message, ...(error.details ? { details: error.details } : {}) } });
+      return;
+    }
+    if (error instanceof SyntaxError && "status" in error && error.status === 400) {
+      response.status(400).json({ error: { code: "MALFORMED_JSON", message: "Request body contains malformed JSON" } });
+      return;
+    }
+    if (typeof error === "object" && error !== null && "type" in error && error.type === "entity.too.large") {
+      response.status(413).json({ error: { code: "PAYLOAD_TOO_LARGE", message: "Request body exceeds the maximum size" } });
       return;
     }
     console.error(error);
