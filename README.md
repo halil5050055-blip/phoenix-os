@@ -67,6 +67,7 @@ Successful business commands atomically persist state changes, domain events, au
 
 Available endpoints:
 
+- `GET /` — redirects to `/health`; no frontend or dashboard is implemented yet
 - `GET /health` — public deployment readiness
 - `POST /api/auth/login`
 - `POST /api/auth/logout`

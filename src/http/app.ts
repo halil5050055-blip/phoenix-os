@@ -55,6 +55,10 @@ export function createApp(database: Database, config: AppConfig) {
   const commands = new CommandExecutor(database);
   app.use(express.json({ limit: "100kb" }));
 
+  app.get("/", (_request, response) => {
+    response.redirect(302, "/health");
+  });
+
   app.get("/health", (_request, response) => {
     const result = database.prepare("SELECT 1 AS ready").get() as { ready: number };
     response.json({ status: result.ready === 1 ? "ok" : "unavailable" });

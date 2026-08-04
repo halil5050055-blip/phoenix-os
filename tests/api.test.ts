@@ -30,6 +30,13 @@ describe("Phoenix BOS Vertical 1 API", () => {
   const patch = (path: string, token = accessToken) => request(app).patch(path).set("Authorization", `Bearer ${token}`);
   const remove = (path: string, token = accessToken) => request(app).delete(path).set("Authorization", `Bearer ${token}`);
 
+  it("redirects the root route to the public operational health endpoint", async () => {
+    const response = await request(app).get("/");
+
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toBe("/health");
+  });
+
   it("creates, lists, qualifies, and converts a lead with audit history", async () => {
     const created = await post("/api/leads").set("Idempotency-Key", "lead-1").send({
       companyName: "Acme Padel",
