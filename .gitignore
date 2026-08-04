@@ -1,0 +1,65 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+
+# Node.js dependencies and package-manager state
+node_modules/
+.pnpm-store/
+.npm/
+.yarn/
+.yarn-cache/
+
+# Build output and caches
+dist/
+build/
+out/
+coverage/
+.cache/
+.parcel-cache/
+.next/
+.nuxt/
+.svelte-kit/
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment and local configuration
+.env
+.env.*
+!.env.example
+*.local
+
+# Runtime files
+*.pid
+*.pid.lock
+
+# VS Code
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+*.code-workspace
+
+# Test and tool caches
+.eslintcache
+.stylelintcache
+.nyc_output/
+tmp/
+temp/
+
+# Miscellaneous
+*.swp
+*.swo
+*~
