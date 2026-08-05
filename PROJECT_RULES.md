@@ -39,11 +39,12 @@ These standards apply across Phoenix OS. Domain-specific rules may extend them i
 
 ## Autonomous Tooling
 
-- Work autonomously through safe, in-scope repository tasks and use non-interactive commands where practical.
-- Never ask to launch Docker Desktop or another desktop container runtime. If no Docker daemon is already available, skip the local image build, report it as unverified, and continue with available checks.
+- Work autonomously through safe, in-scope repository tasks and use non-interactive commands.
+- Do not request confirmation for ordinary read-only checks or scoped implementation steps. Keep required safety checks and obtain authorization only when a destructive, privileged, or externally consequential action requires it.
+- Complete work locally by default. Do not use the GitHub API or CLI, Railway CLI, browser automation, Docker Desktop, interactive editors, or other interactive tooling.
 - Do not run `npm audit`, `npm fund`, or `npm outdated` unless the user explicitly requests that exact check in the current task.
-- Skip optional operations that require network access when they are not explicitly required for delivery. Record the skipped check without requesting approval.
-- Do not request confirmation for ordinary read-only checks or scoped implementation steps. Required platform-enforced approvals and approvals for destructive, privileged, or externally consequential actions remain mandatory.
+- Use an already-running container daemon when available, but never launch or ask to launch Docker Desktop or another desktop container runtime. If no daemon is available, report the image build as unverified and continue with other checks.
+- Skip optional network operations automatically. When delivery or production verification requires an external service or approval-gated command, stop at the last successful local step and report exactly what remains instead of requesting approval.
 
 ## Security and Privacy
 
