@@ -30,11 +30,52 @@ describe("Phoenix BOS Vertical 1 API", () => {
   const patch = (path: string, token = accessToken) => request(app).patch(path).set("Authorization", `Bearer ${token}`);
   const remove = (path: string, token = accessToken) => request(app).delete(path).set("Authorization", `Bearer ${token}`);
 
-  it("redirects the root route to the public operational health endpoint", async () => {
-    const response = await request(app).get("/");
+  it("serves login UI at the root and protects the dashboard with a browser session", async () => {
+    const root = await request(app).get("/");
+    expect(root.status).toBe(200);
+    expect(root.type).toBe("text/html");
+    expect(root.text).toContain("Sign in to Phoenix BOS");
+    expect(root.headers["content-security-policy"]).toContain("default-src 'self'");
 
-    expect(response.status).toBe(302);
-    expect(response.headers.location).toBe("/health");
+    const loginPage = await request(app).get("/login");
+    expect(loginPage.status).toBe(200);
+    expect(loginPage.text).toContain('id="login-form"');
+
+    const unauthenticatedDashboard = await request(app).get("/dashboard");
+    expect(unauthenticatedDashboard.status).toBe(302);
+    expect(unauthenticatedDashboard.headers.location).toBe("/login");
+
+    const invalidLogin = await request(app).post("/api/auth/login").send({ email: ADMIN_EMAIL, password: "invalid-password" });
+    expect(invalidLogin.status).toBe(401);
+    expect(invalidLogin.headers["set-cookie"]).toBeUndefined();
+
+    const login = await request(app).post("/api/auth/login").set("X-Phoenix-Web-Session", "1").send({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
+    expect(login.status).toBe(200);
+    expect(login.body).not.toHaveProperty("accessToken");
+    const setCookie = login.headers["set-cookie"] as unknown as string[];
+    expect(setCookie[0]).toContain("phoenix_session=");
+    expect(setCookie[0]).toContain("HttpOnly");
+    expect(setCookie[0]).toContain("SameSite=Strict");
+    const cookie = setCookie[0]!.split(";")[0]!;
+
+    const dashboard = await request(app).get("/dashboard").set("Cookie", cookie);
+    expect(dashboard.status).toBe(200);
+    expect(dashboard.text).toContain("Vertical 1 active");
+
+    const session = await request(app).get("/api/auth/session").set("Cookie", cookie);
+    expect(session.status).toBe(200);
+    expect(session.body.user).toMatchObject({ email: ADMIN_EMAIL, displayName: "Test Admin", role: "ADMIN" });
+    expect(session.body).not.toHaveProperty("accessToken");
+
+    const logout = await request(app).post("/api/auth/logout").set("Cookie", cookie);
+    expect(logout.status).toBe(204);
+    expect((logout.headers["set-cookie"] as unknown as string[])[0]).toContain("phoenix_session=");
+    expect((await request(app).get("/dashboard").set("Cookie", cookie)).headers.location).toBe("/login");
+
+    const secureLogin = await request(createApp(database, { jwtSecret: JWT_SECRET, secureCookies: true }))
+      .post("/api/auth/login")
+      .send({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
+    expect((secureLogin.headers["set-cookie"] as unknown as string[])[0]).toContain("Secure");
   });
 
   it("creates, lists, qualifies, and converts a lead with audit history", async () => {

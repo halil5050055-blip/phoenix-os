@@ -1,5 +1,6 @@
 import express, { type Request, type Response, type NextFunction } from "express";
 import { createHmac } from "node:crypto";
+import { resolve } from "node:path";
 import type { ZodType } from "zod";
 import type { Database } from "../shared/database.js";
 import { AppError } from "../shared/errors.js";
@@ -7,7 +8,7 @@ import { CommandExecutor } from "../shared/idempotency.js";
 import { LeadService } from "../modules/leads/lead-service.js";
 import { OfferService } from "../modules/offers/offer-service.js";
 import { AuthService } from "../modules/auth/auth-service.js";
-import { authenticate, authorize } from "../modules/auth/middleware.js";
+import { accessToken, authenticate, authorize, SESSION_COOKIE_NAME } from "../modules/auth/middleware.js";
 import { hashPassword } from "../modules/auth/password.js";
 import { UserService } from "../modules/users/user-service.js";
 import { TaskService } from "../modules/tasks/task-service.js";
@@ -43,6 +44,7 @@ function userActor(request: Request) {
 export interface AppConfig {
   jwtSecret: string;
   tokenTtlSeconds?: number;
+  secureCookies?: boolean;
 }
 
 export function createApp(database: Database, config: AppConfig) {
@@ -53,10 +55,41 @@ export function createApp(database: Database, config: AppConfig) {
   const tasks = new TaskService(database);
   const auth = new AuthService(database, config.jwtSecret, config.tokenTtlSeconds);
   const commands = new CommandExecutor(database);
+  const webRoot = resolve("website/public");
+  const sessionCookie = {
+    httpOnly: true,
+    secure: config.secureCookies ?? false,
+    sameSite: "strict" as const,
+    path: "/",
+  };
   app.use(express.json({ limit: "100kb" }));
 
+  app.use((_request, response, next) => {
+    response.set({
+      "Content-Security-Policy": "default-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self'; script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+      "Referrer-Policy": "no-referrer",
+      "X-Content-Type-Options": "nosniff",
+    });
+    next();
+  });
+
+  app.use("/assets", express.static(resolve(webRoot, "assets"), { index: false, maxAge: "1h" }));
+
   app.get("/", (_request, response) => {
-    response.redirect(302, "/health");
+    response.set("Cache-Control", "no-store").sendFile("login.html", { root: webRoot });
+  });
+
+  app.get("/login", (_request, response) => {
+    response.set("Cache-Control", "no-store").sendFile("login.html", { root: webRoot });
+  });
+
+  app.get("/dashboard", async (request, response) => {
+    try {
+      request.auth = await auth.authenticate(accessToken(request));
+      response.set("Cache-Control", "no-store").sendFile("dashboard.html", { root: webRoot });
+    } catch {
+      response.clearCookie(SESSION_COOKIE_NAME, sessionCookie).redirect(302, "/login");
+    }
   });
 
   app.get("/health", (_request, response) => {
@@ -66,14 +99,25 @@ export function createApp(database: Database, config: AppConfig) {
 
   app.post("/api/auth/login", async (request, response) => {
     const body = validate(loginSchema, request.body) as { email: string; password: string };
-    response.json(await auth.login(body.email, body.password));
+    const result = await auth.login(body.email, body.password);
+    response.cookie(SESSION_COOKIE_NAME, result.accessToken, { ...sessionCookie, maxAge: result.expiresIn * 1000 });
+    if (request.header("X-Phoenix-Web-Session") === "1") {
+      response.json({ expiresIn: result.expiresIn, user: result.user });
+      return;
+    }
+    response.json(result);
   });
 
   app.use("/api", authenticate(auth));
 
   app.post("/api/auth/logout", (request, response) => {
     auth.logout(request.auth!);
-    response.status(204).send();
+    response.clearCookie(SESSION_COOKIE_NAME, sessionCookie).status(204).send();
+  });
+
+  app.get("/api/auth/session", (request, response) => {
+    const { userId, email, displayName, role, expiresAt } = request.auth!;
+    response.json({ user: { userId, email, displayName, role }, expiresAt });
   });
 
   app.get("/api/users", authorize("ADMIN"), (_request, response) => response.json({ data: users.list() }));

@@ -15,4 +15,6 @@ memory
 prompts
 tasks
 templates
-website
+website/*
+!website/public
+!website/public/**

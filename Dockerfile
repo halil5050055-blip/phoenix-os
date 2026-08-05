@@ -14,6 +14,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --omit=optional && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY migrations ./migrations
+COPY website/public ./website/public
 RUN mkdir -p /data && chown -R node:node /app /data
 USER node
 EXPOSE 3000

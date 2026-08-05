@@ -11,7 +11,7 @@ if (config.nodeEnv !== "production" && process.env.DATABASE_PATH === undefined) 
 const database = createDatabase(config.databasePath);
 await bootstrapInitialAdmin(database, config.initialAdmin);
 
-const server = createApp(database, { jwtSecret: config.jwtSecret }).listen(config.port, config.host, () => {
+const server = createApp(database, { jwtSecret: config.jwtSecret, secureCookies: config.nodeEnv === "production" }).listen(config.port, config.host, () => {
   console.log(`Phoenix BOS API listening on ${config.host}:${config.port}`);
 });
 

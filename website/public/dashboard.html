@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Phoenix Business Operating System dashboard">
+    <title>Dashboard | Phoenix BOS</title>
+    <link rel="stylesheet" href="/assets/styles.css">
+    <script src="/assets/app.js" defer></script>
+  </head>
+  <body data-page="dashboard">
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+          <div class="brand-mark small" aria-hidden="true">P</div>
+          <div><strong>Phoenix BOS</strong><span>Business OS</span></div>
+        </div>
+        <nav aria-label="Primary navigation">
+          <a class="nav-item active" href="/dashboard" aria-current="page"><span>⌂</span> Dashboard</a>
+          <button class="nav-item" data-coming-soon="Leads"><span>◎</span> Leads</button>
+          <button class="nav-item" data-coming-soon="Commercial Offers"><span>◇</span> Commercial Offers</button>
+          <button class="nav-item" data-coming-soon="Tasks"><span>✓</span> Tasks</button>
+          <button class="nav-item" data-coming-soon="Telegram"><span>↗</span> Telegram</button>
+          <button class="nav-item" data-coming-soon="Settings"><span>⚙</span> Settings</button>
+        </nav>
+        <div class="sidebar-footer"><span></span> Vertical 1 active</div>
+      </aside>
+
+      <main class="dashboard-main">
+        <header class="topbar">
+          <button class="menu-button" id="menu-button" aria-label="Toggle navigation" aria-controls="sidebar" aria-expanded="false">☰</button>
+          <div class="topbar-user">
+            <div class="avatar" id="user-avatar" aria-hidden="true">P</div>
+            <div><strong id="user-name">Loading…</strong><span id="user-role"></span></div>
+            <button class="secondary-button" id="logout-button">Log out</button>
+          </div>
+        </header>
+
+        <div class="dashboard-content">
+          <section class="welcome-row">
+            <div><p class="eyebrow accent">Command center</p><h1>Good to see you, <span id="welcome-name">there</span>.</h1><p class="muted">Here is the current state of your Phoenix workspace.</p></div>
+            <div class="vertical-badge dark"><span></span> Vertical 1 active</div>
+          </section>
+
+          <section class="status-grid" aria-label="System overview">
+            <article class="status-card"><div class="card-icon healthy">●</div><div><p>Backend status</p><strong id="backend-status">Checking…</strong><span id="backend-detail">Connecting to Phoenix BOS</span></div></article>
+            <article class="status-card"><div class="card-icon">P</div><div><p>Signed in as</p><strong id="account-name">Loading…</strong><span id="account-email"></span></div></article>
+            <article class="status-card"><div class="card-icon">V1</div><div><p>Active workflow</p><strong>Commercial operations</strong><span>Lead → offer → follow-up</span></div></article>
+          </section>
+
+          <section aria-labelledby="quick-links-title">
+            <div class="section-heading"><div><p class="eyebrow accent">Workspace</p><h2 id="quick-links-title">Quick links</h2></div><span>Foundation milestone</span></div>
+            <div class="quick-grid">
+              <button class="quick-card" data-coming-soon="Leads"><span class="quick-icon">◎</span><strong>Leads</strong><small>Qualify and convert opportunities</small><b>Coming soon →</b></button>
+              <button class="quick-card" data-coming-soon="Commercial Offers"><span class="quick-icon">◇</span><strong>Commercial Offers</strong><small>Prepare and review proposals</small><b>Coming soon →</b></button>
+              <button class="quick-card" data-coming-soon="Tasks"><span class="quick-icon">✓</span><strong>Tasks</strong><small>Track follow-ups and next actions</small><b>Coming soon →</b></button>
+            </div>
+          </section>
+
+          <div id="coming-soon" class="coming-soon" role="status" hidden><strong id="coming-soon-title"></strong><span>This workspace will be available in a future milestone.</span></div>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

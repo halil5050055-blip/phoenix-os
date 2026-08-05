@@ -58,8 +58,13 @@ The worker uses long polling, so run exactly one Telegram worker replica. It aut
 ## Deployment Verification
 
 1. Confirm the backend deployment health check returns HTTP 200 from `/health`.
-2. Confirm the backend volume is mounted at `/data` and the database survives a redeploy.
-3. Confirm Telegram worker logs report that long polling started without printing credentials.
-4. From an allowlisted Telegram account, run `/status` and `/help`.
-5. From a non-allowlisted account, confirm commands return `Access denied.`
-6. Review backend `audit_events` for Telegram command records.
+2. Open the public domain and confirm `/` and `/login` display the Phoenix BOS sign-in page over HTTPS.
+3. Sign in with `INITIAL_ADMIN_EMAIL` and its configured password; confirm the browser reaches `/dashboard`, shows the administrator name and role, and reports the backend as operational.
+4. In a private browser window, request `/dashboard` and confirm it redirects to `/login`.
+5. Enter an invalid password and confirm the login page displays a generic authentication error without logging or exposing credentials.
+6. Select **Log out**, confirm `/login` loads, and confirm `/dashboard` again redirects to `/login`.
+7. Confirm the backend volume is mounted at `/data` and the database survives a redeploy.
+8. Confirm Telegram worker logs report that long polling started without printing credentials.
+9. From an allowlisted Telegram account, run `/status` and `/help`.
+10. From a non-allowlisted account, confirm commands return `Access denied.`
+11. Review backend `audit_events` for Telegram command records.

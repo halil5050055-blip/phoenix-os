@@ -37,6 +37,14 @@ These standards apply across Phoenix OS. Domain-specific rules may extend them i
 - Run the most relevant available checks before considering work complete.
 - Never report a check as passing unless it was actually run successfully.
 
+## Autonomous Tooling
+
+- Work autonomously through safe, in-scope repository tasks and use non-interactive commands where practical.
+- Never ask to launch Docker Desktop or another desktop container runtime. If no Docker daemon is already available, skip the local image build, report it as unverified, and continue with available checks.
+- Do not run `npm audit`, `npm fund`, or `npm outdated` unless the user explicitly requests that exact check in the current task.
+- Skip optional operations that require network access when they are not explicitly required for delivery. Record the skipped check without requesting approval.
+- Do not request confirmation for ordinary read-only checks or scoped implementation steps. Required platform-enforced approvals and approvals for destructive, privileged, or externally consequential actions remain mandatory.
+
 ## Security and Privacy
 
 - Never commit secrets, credentials, private keys, or production environment files.

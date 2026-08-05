@@ -51,7 +51,7 @@ The project treats documentation and memory as first-class infrastructure. Decis
 The Vertical 1 backend is a Node.js 24 and TypeScript modular monolith using SQLite. It supports lead intake and qualification, conversion to a client, deterministic commercial-offer drafts, approval intake, follow-up tasks, idempotent commands, domain events, and audit events.
 
 ```bash
-npm install
+npm ci
 npm test
 JWT_SECRET="replace-with-at-least-32-random-bytes" \
 INITIAL_ADMIN_EMAIL="admin@example.com" \
@@ -61,16 +61,37 @@ npm start
 
 The API binds to `0.0.0.0` using `PORT`, with a local fallback of `3000`, and stores local development data in `data/phoenix-bos.sqlite`. `JWT_SECRET` is always required and must contain at least 32 UTF-8 bytes. On an empty database, `INITIAL_ADMIN_EMAIL` and an `INITIAL_ADMIN_PASSWORD` of at least 12 characters are required; they are ignored after the first user exists. Production requires every documented backend variable and enforces `DATABASE_PATH=/data/phoenix-bos.sqlite`.
 
-All endpoints except login require `Authorization: Bearer <token>`. Logout revokes the presented JWT immediately. Business commands and user mutations also require an `Idempotency-Key` header, scoped to the authenticated user. Monetary amounts are integer minor units; for example, `12500` represents EUR 125.00. Percentage discounts use integer basis points and round down to the nearest minor unit.
+### Web UI
+
+After starting Phoenix BOS, open [http://localhost:3000](http://localhost:3000) or `/login` on the deployed Railway domain. Sign in with the address configured as `INITIAL_ADMIN_EMAIL` and its corresponding `INITIAL_ADMIN_PASSWORD`. The dashboard displays the authenticated user, backend status, Vertical 1 status, and placeholders for future Leads, Commercial Offers, and Tasks workspaces.
+
+The browser session uses the existing JWT authentication in an HTTP-only, `SameSite=Strict` cookie; production cookies are also `Secure`. The application does not store credentials or expose its token to frontend JavaScript. Bearer tokens remain supported for API and Telegram clients.
+
+Local development commands:
+
+```bash
+npm ci
+npm run typecheck
+npm run build
+npm test
+npm run dev
+```
+
+Required Railway backend variables are `NODE_ENV`, `PORT`, `DATABASE_PATH`, `JWT_SECRET`, `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD`, and `INITIAL_ADMIN_NAME`. Production must use `DATABASE_PATH=/data/phoenix-bos.sqlite` with a persistent volume mounted at `/data`; see the Railway deployment guide linked below.
+
+Protected API endpoints accept `Authorization: Bearer <token>` or the web UI's HTTP-only session cookie. Logout revokes the presented JWT immediately. Business commands and user mutations also require an `Idempotency-Key` header, scoped to the authenticated user. Monetary amounts are integer minor units; for example, `12500` represents EUR 125.00. Percentage discounts use integer basis points and round down to the nearest minor unit.
 
 Successful business commands atomically persist state changes, domain events, audit events, and idempotency responses. Rejected business commands are recorded in the audit log without retaining their request body.
 
 Available endpoints:
 
-- `GET /` — redirects to `/health`; no frontend or dashboard is implemented yet
+- `GET /` — Phoenix BOS login application
+- `GET /login` — login application
+- `GET /dashboard` — authenticated dashboard shell
 - `GET /health` — public deployment readiness
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
+- `GET /api/auth/session` — current authenticated web/API identity
 - `POST /api/users` — Admin
 - `GET /api/users` — Admin
 - `GET /api/users/:id` — Admin
@@ -88,7 +109,7 @@ Available endpoints:
 - `POST /api/commercial-offers/:id/submit-for-approval`
 - `POST /api/commercial-offers/:id/follow-up`
 
-Approval intake moves a draft offer to `PENDING_APPROVAL` and creates one pending approval record. Approval decisions remain deferred to the next milestone, which can now enforce them through the authenticated identity boundary. This milestone also excludes Telegram, PDF generation, email delivery, frontend applications, AI integrations, and microservices.
+Approval intake moves a draft offer to `PENDING_APPROVAL` and creates one pending approval record. Approval decisions remain deferred to the next milestone, which can now enforce them through the authenticated identity boundary. CRM web pages, PDF generation, email delivery, AI integrations, and microservices remain outside the current milestone.
 
 Roles are `ADMIN`, `MANAGER`, `SALES`, and `ACCOUNTANT`. Admin, Manager, and Sales may operate leads and offers. Accountants may read commercial offers. Only Admin may manage users. Role changes take effect immediately, deactivation invalidates existing tokens, and the last active administrator cannot be removed or demoted.
 
