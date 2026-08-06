@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "objective": "Demonstrate deterministic Runner Core task persistence without changing Phoenix BOS.",
+  "scope": ["Create and inspect a Runner task record."],
+  "allowedChanges": [{ "pattern": "tools/phoenix-engineering/**" }],
+  "forbiddenChanges": [{ "pattern": ".git/**" }, { "pattern": "src/**" }, { "pattern": "migrations/**" }],
+  "invariants": ["Phoenix BOS product code remains unchanged."],
+  "acceptanceCriteria": [{ "id": "task-persisted", "description": "The demo task persists and can be read.", "mandatory": true }],
+  "requiredTests": ["runner-core-tests"],
+  "verificationCommands": ["npm test"],
+  "risks": ["The manual provider is intentionally non-autonomous."]
+}
