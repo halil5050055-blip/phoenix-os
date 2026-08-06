@@ -3,6 +3,7 @@ import { ROLES } from "../modules/users/user-service.js";
 
 const trimmed = z.string().trim().min(1).max(200);
 const optionalTrimmed = z.string().trim().min(1).max(500).optional();
+const futureDateTime = z.iso.datetime().refine((value) => Date.parse(value) > Date.now(), "Date and time must be in the future");
 
 export const createLeadSchema = z.object({
   companyName: trimmed,
@@ -30,13 +31,22 @@ export const createOfferSchema = z.object({
 }).strict();
 
 export const followUpSchema = z.object({
-  dueAt: z.iso.datetime(),
+  dueAt: futureDateTime,
   notes: optionalTrimmed,
 }).strict();
+
+export const completeTaskSchema = z.object({ note: optionalTrimmed }).strict();
+export const assignTaskSchema = z.object({ assigneeId: z.uuid().nullable() }).strict();
+export const rescheduleTaskSchema = z.object({ dueAt: futureDateTime }).strict();
 
 export const submitForApprovalSchema = z.object({
   reason: optionalTrimmed,
 }).strict();
+
+export const approvalDecisionSchema = z.discriminatedUnion("decision", [
+  z.object({ decision: z.literal("APPROVED"), reason: optionalTrimmed }).strict(),
+  z.object({ decision: z.literal("REJECTED"), reason: z.string().trim().min(1).max(500) }).strict(),
+]);
 
 const email = z.email().max(254).transform((value) => value.trim().toLowerCase());
 const password = z.string().min(12).max(128);

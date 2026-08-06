@@ -87,3 +87,97 @@ These standards apply across Phoenix OS. Domain-specific rules may extend them i
 - Documentation and memory are current.
 - No secrets, debug artifacts, or unrelated changes are included.
 - Remaining risks or follow-up work are recorded.
+
+# Policy Precedence
+
+When instructions conflict, apply them in the following order:
+
+1. PROJECT_RULES.md
+2. AGENTS.md
+3. Project documentation
+4. Roadmap and TODO
+5. Session instructions
+
+Lower-priority instructions must never override higher-priority policies.
+
+If a conflict cannot be resolved safely, stop and report the conflict.
+
+
+# Policy Change Rule
+
+Engineering policies are intentionally stable.
+
+Do not create, modify or expand repository-wide engineering policies during normal implementation work.
+
+Policy changes are allowed only when:
+
+- a recurring implementation problem has been observed;
+- existing policies demonstrably fail to address it;
+- the proposed change is minimal;
+- the expected benefit exceeds the additional complexity.
+
+All permanent policy changes require an ADR or explicit owner approval.
+
+
+# Complexity Budget
+
+Every permanent increase in architectural complexity must provide measurable long-term value.
+
+Whenever practical:
+
+- remove more complexity than you add;
+- prefer composition over expansion;
+- prefer deletion over accumulation;
+- prefer stable abstractions over additional features.
+
+Complexity is a permanent engineering cost.
+
+Business value is the justification for paying it.
+
+
+# Implementation Priority Policy
+
+Purpose
+
+Maximize delivered product value while maintaining engineering quality.
+
+Priority order:
+
+1. Executable application functionality.
+2. Infrastructure, testing, security, observability and quality.
+3. Documentation required to implement or operate completed functionality.
+4. Strategic documentation, templates and planning artifacts.
+
+When multiple valid milestones exist, select the highest-priority milestone according to this order.
+
+Explicit owner instructions take precedence over automatically selected roadmap work.
+
+Documentation should enable implementation rather than indefinitely precede it.
+
+Create documentation ahead of implementation only when it materially reduces implementation risk, ambiguity, coordination cost or architectural uncertainty.
+
+If executable functionality is not blocked by missing documentation, prefer implementation.
+
+When deviating from roadmap order, explain the reason in the completion report and identify the deferred milestone.
+
+
+# Phoenix BOS Engineering Policies
+
+Version: 1.0
+
+Status: Frozen
+
+This engineering policy set is considered complete.
+
+Repository-wide engineering policies must remain stable.
+
+New permanent policies require explicit owner approval or an approved ADR and may be introduced only after repeated implementation experience demonstrates that:
+
+- a recurring engineering problem exists;
+- existing policies are insufficient;
+- the proposed policy is minimal;
+- its long-term benefit exceeds its maintenance cost.
+
+Until then:
+
+Improve the product rather than the policy.

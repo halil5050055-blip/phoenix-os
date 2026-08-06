@@ -1,6 +1,8 @@
 import express, { type Request, type Response, type NextFunction } from "express";
 import { createHmac } from "node:crypto";
-import { resolve } from "node:path";
+import { existsSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ZodType } from "zod";
 import type { Database } from "../shared/database.js";
 import { AppError } from "../shared/errors.js";
@@ -12,8 +14,10 @@ import { accessToken, authenticate, authorize, SESSION_COOKIE_NAME } from "../mo
 import { hashPassword } from "../modules/auth/password.js";
 import { UserService } from "../modules/users/user-service.js";
 import { TaskService } from "../modules/tasks/task-service.js";
+import { ClientService } from "../modules/clients/client-service.js";
+import { VerticalOneReportService } from "../modules/reporting/vertical-one-report-service.js";
 import { recordAuditEvent } from "../shared/audit.js";
-import { convertLeadSchema, createLeadSchema, createOfferSchema, createUserSchema, followUpSchema, loginSchema, qualifyLeadSchema, submitForApprovalSchema, telegramAuditSchema, updateUserSchema } from "./schemas.js";
+import { approvalDecisionSchema, assignTaskSchema, completeTaskSchema, convertLeadSchema, createLeadSchema, createOfferSchema, createUserSchema, followUpSchema, loginSchema, qualifyLeadSchema, rescheduleTaskSchema, submitForApprovalSchema, telegramAuditSchema, updateUserSchema } from "./schemas.js";
 
 function validate(schema: ZodType, value: unknown): unknown {
   const result = schema.safeParse(value);
@@ -41,6 +45,26 @@ function userActor(request: Request) {
   return { actorId: request.auth!.userId, actorType: "USER" as const };
 }
 
+function defaultWebRoot(): string {
+  const moduleDirectory = dirname(fileURLToPath(import.meta.url));
+  const candidates = [resolve(moduleDirectory, "../../website/public"), resolve(moduleDirectory, "../../../website/public")];
+  return candidates.find((candidate) => existsSync(candidate)) ?? resolve("website/public");
+}
+
+function requireSameOriginCookieRequest(request: Request, _response: Response, next: NextFunction): void {
+  if (["GET", "HEAD", "OPTIONS"].includes(request.method) || request.header("Authorization")?.startsWith("Bearer ")) {
+    next();
+    return;
+  }
+  try {
+    const origin = request.header("Origin");
+    if (!origin || new URL(origin).host !== request.header("Host")) throw new Error("Cross-origin request");
+    next();
+  } catch {
+    next(new AppError(403, "INVALID_REQUEST_ORIGIN", "Cookie-authenticated requests must originate from Phoenix BOS"));
+  }
+}
+
 export interface AppConfig {
   jwtSecret: string;
   tokenTtlSeconds?: number;
@@ -53,14 +77,28 @@ export function createApp(database: Database, config: AppConfig) {
   const offers = new OfferService(database);
   const users = new UserService(database);
   const tasks = new TaskService(database);
+  const clients = new ClientService(database);
+  const reports = new VerticalOneReportService(database);
   const auth = new AuthService(database, config.jwtSecret, config.tokenTtlSeconds);
   const commands = new CommandExecutor(database);
-  const webRoot = resolve("website/public");
+  const webRoot = defaultWebRoot();
   const sessionCookie = {
     httpOnly: true,
     secure: config.secureCookies ?? false,
     sameSite: "strict" as const,
     path: "/",
+  };
+  const serveAuthenticatedPage = (filename: string, roles?: readonly string[]) => async (request: Request, response: Response): Promise<void> => {
+    try {
+      request.auth = await auth.authenticate(accessToken(request));
+      if (roles && !roles.includes(request.auth.role)) {
+        response.redirect(302, "/dashboard");
+        return;
+      }
+      response.set("Cache-Control", "no-store").sendFile(filename, { root: webRoot });
+    } catch {
+      response.clearCookie(SESSION_COOKIE_NAME, sessionCookie).redirect(302, "/login");
+    }
   };
   app.use(express.json({ limit: "100kb" }));
 
@@ -83,14 +121,13 @@ export function createApp(database: Database, config: AppConfig) {
     response.set("Cache-Control", "no-store").sendFile("login.html", { root: webRoot });
   });
 
-  app.get("/dashboard", async (request, response) => {
-    try {
-      request.auth = await auth.authenticate(accessToken(request));
-      response.set("Cache-Control", "no-store").sendFile("dashboard.html", { root: webRoot });
-    } catch {
-      response.clearCookie(SESSION_COOKIE_NAME, sessionCookie).redirect(302, "/login");
-    }
-  });
+  app.get("/dashboard", serveAuthenticatedPage("dashboard.html"));
+
+  app.get("/leads", serveAuthenticatedPage("leads.html", ["ADMIN", "MANAGER", "SALES"]));
+
+  app.get("/commercial-offers", serveAuthenticatedPage("commercial-offers.html", ["ADMIN", "MANAGER", "SALES", "ACCOUNTANT"]));
+
+  app.get("/tasks", serveAuthenticatedPage("tasks.html", ["ADMIN", "MANAGER", "SALES"]));
 
   app.get("/health", (_request, response) => {
     const result = database.prepare("SELECT 1 AS ready").get() as { ready: number };
@@ -108,7 +145,7 @@ export function createApp(database: Database, config: AppConfig) {
     response.json(result);
   });
 
-  app.use("/api", authenticate(auth));
+  app.use("/api", authenticate(auth), requireSameOriginCookieRequest);
 
   app.post("/api/auth/logout", (request, response) => {
     auth.logout(request.auth!);
@@ -170,6 +207,8 @@ export function createApp(database: Database, config: AppConfig) {
 
   app.get("/api/leads", authorize("ADMIN", "MANAGER", "SALES"), (_request, response) => response.json({ data: leads.list() }));
 
+  app.get("/api/clients", authorize("ADMIN", "MANAGER", "SALES", "ACCOUNTANT"), (_request, response) => response.json({ data: clients.list() }));
+
   app.post("/api/leads/:id/qualify", authorize("ADMIN", "MANAGER", "SALES"), (request, response) => {
     const body = validate(qualifyLeadSchema, request.body) as { notes?: string };
     const result = commands.execute("QUALIFY_LEAD", idempotencyKey(request), { id: resourceId(request), ...body }, userActor(request), (context) => ({ body: leads.qualify(resourceId(request), body.notes, context), statusCode: 200 }));
@@ -195,6 +234,40 @@ export function createApp(database: Database, config: AppConfig) {
 
   app.get("/api/tasks", authorize("ADMIN", "MANAGER", "SALES"), (_request, response) => response.json({ data: tasks.list() }));
 
+  app.get("/api/task-assignees", authorize("ADMIN", "MANAGER"), (_request, response) => response.json({ data: tasks.eligibleAssignees() }));
+
+  app.get("/api/reports/vertical-1", authorize("ADMIN", "MANAGER"), (_request, response) => response.json(reports.summary()));
+
+  app.post("/api/tasks/:id/complete", authorize("ADMIN", "MANAGER", "SALES"), (request, response) => {
+    const body = validate(completeTaskSchema, request.body) as { note?: string };
+    const payload = { id: resourceId(request), ...body };
+    const result = commands.execute("COMPLETE_TASK", idempotencyKey(request), payload, userActor(request), (context) => ({
+      body: tasks.complete(resourceId(request), body.note, request.auth!.userId, context),
+      statusCode: 200,
+    }));
+    response.set("Idempotency-Replayed", String(result.replayed)).json(result.body);
+  });
+
+  app.post("/api/tasks/:id/assign", authorize("ADMIN", "MANAGER"), (request, response) => {
+    const body = validate(assignTaskSchema, request.body) as { assigneeId: string | null };
+    const payload = { id: resourceId(request), ...body };
+    const result = commands.execute("ASSIGN_TASK", idempotencyKey(request), payload, userActor(request), (context) => ({
+      body: tasks.assign(resourceId(request), body.assigneeId, request.auth!.userId, context),
+      statusCode: 200,
+    }));
+    response.set("Idempotency-Replayed", String(result.replayed)).json(result.body);
+  });
+
+  app.post("/api/tasks/:id/reschedule", authorize("ADMIN", "MANAGER", "SALES"), (request, response) => {
+    const body = validate(rescheduleTaskSchema, request.body) as { dueAt: string };
+    const payload = { id: resourceId(request), ...body };
+    const result = commands.execute("RESCHEDULE_TASK", idempotencyKey(request), payload, userActor(request), (context) => ({
+      body: tasks.reschedule(resourceId(request), body.dueAt, request.auth!.userId, request.auth!.role as "ADMIN" | "MANAGER" | "SALES", context),
+      statusCode: 200,
+    }));
+    response.set("Idempotency-Replayed", String(result.replayed)).json(result.body);
+  });
+
   app.post("/api/integrations/telegram/audit", authorize("ADMIN", "MANAGER", "SALES"), (request, response) => {
     const body = validate(telegramAuditSchema, request.body) as { updateId: number; telegramUserId: string; command: string; allowed: boolean };
     const result = commands.execute("RECORD_TELEGRAM_COMMAND", idempotencyKey(request), body, userActor(request), (context) => {
@@ -216,6 +289,16 @@ export function createApp(database: Database, config: AppConfig) {
       statusCode: 201,
     }));
     response.status(result.statusCode).set("Idempotency-Replayed", String(result.replayed)).json(result.body);
+  });
+
+  app.post("/api/commercial-offers/:id/approval-decision", authorize("ADMIN", "ACCOUNTANT"), (request, response) => {
+    const body = validate(approvalDecisionSchema, request.body) as { decision: "APPROVED" | "REJECTED"; reason?: string };
+    const payload = { id: resourceId(request), ...body };
+    const result = commands.execute("DECIDE_OFFER_APPROVAL", idempotencyKey(request), payload, userActor(request), (context) => ({
+      body: offers.decideApproval(resourceId(request), body.decision, body.reason, request.auth!.userId, context),
+      statusCode: 200,
+    }));
+    response.set("Idempotency-Replayed", String(result.replayed)).json(result.body);
   });
 
   app.post("/api/commercial-offers/:id/follow-up", authorize("ADMIN", "MANAGER", "SALES"), (request, response) => {

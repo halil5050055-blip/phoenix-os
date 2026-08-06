@@ -1,5 +1,5 @@
 # Website
 
-`public/` contains the dependency-free Phoenix BOS login page and dashboard shell served by the existing Express application. HTML is delivered by explicit web routes, while CSS and JavaScript are exposed under `/assets`.
+`public/` contains the dependency-free Phoenix BOS login page, dashboard shell, Leads workspace, Commercial Offers workspace, and Tasks workspace served by the existing Express application. HTML is delivered by explicit web routes, while CSS and JavaScript are exposed under `/assets`.
 
-The web UI uses the canonical backend API and does not contain business logic. Browser authentication reuses the backend JWT in an HTTP-only session cookie; frontend JavaScript cannot read the token.
+The web UI uses the canonical backend API and does not contain business logic. Browser authentication reuses the backend JWT in an HTTP-only session cookie; frontend JavaScript cannot read the token. Admin, Manager, and Sales users can operate Leads and Commercial Offers and complete follow-up tasks. Admins and Managers can assign and reschedule open tasks; Sales can reschedule tasks assigned to them. Admins and Managers also see aggregate Vertical 1 workflow reporting on the dashboard. Admins and Accountants can decide pending offer approvals; Accountants otherwise have read-only offer access. Backend validation, state transitions, assignment eligibility, scheduling authorization, reporting definitions, idempotency, and role authorization remain authoritative.

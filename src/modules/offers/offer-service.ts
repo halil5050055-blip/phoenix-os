@@ -14,7 +14,7 @@ interface OfferRow {
   id: string;
   client_id: string;
   price_policy_id: string | null;
-  status: "DRAFT" | "PENDING_APPROVAL";
+  status: "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
   currency: string;
   subtotal_minor: number;
   discount_minor: number;
@@ -92,9 +92,9 @@ export class OfferService {
       FROM commercial_offer_items WHERE commercial_offer_id = ? ORDER BY rowid
     `).all(id) as Array<Record<string, unknown>>;
     const approval = this.database.prepare(`
-      SELECT id, status, request_reason, requested_at
+      SELECT id, status, request_reason, requested_at, decision_reason, decided_at, decided_by
       FROM offer_approvals WHERE commercial_offer_id = ?
-    `).get(id) as { id: string; status: "PENDING"; request_reason: string | null; requested_at: string } | undefined;
+    `).get(id) as { id: string; status: "PENDING" | "APPROVED" | "REJECTED"; request_reason: string | null; requested_at: string; decision_reason: string | null; decided_at: string | null; decided_by: string | null } | undefined;
     return {
       id: offer.id,
       clientId: offer.client_id,
@@ -111,6 +111,9 @@ export class OfferService {
         status: approval.status,
         requestReason: approval.request_reason,
         requestedAt: approval.requested_at,
+        decisionReason: approval.decision_reason,
+        decidedAt: approval.decided_at,
+        decidedBy: approval.decided_by,
       } : null,
       items: items.map((item) => ({
         id: item.id,
@@ -144,17 +147,51 @@ export class OfferService {
     return this.get(id);
   }
 
+  decideApproval(id: string, decision: "APPROVED" | "REJECTED", reason: string | undefined, reviewerId: string, context: CommandContext) {
+    const offer = this.get(id);
+    if (offer.status !== "PENDING_APPROVAL" || offer.approval?.status !== "PENDING") {
+      throw new ConflictError("INVALID_APPROVAL_STATE", "Only a pending approval can receive a decision");
+    }
+    if (decision === "REJECTED" && !reason) {
+      throw new ConflictError("REJECTION_REASON_REQUIRED", "A rejection reason is required");
+    }
+
+    const decidedAt = new Date().toISOString();
+    this.database.prepare(`
+      UPDATE offer_approvals
+      SET status = ?, decision_reason = ?, decided_at = ?, decided_by = ?
+      WHERE id = ? AND status = 'PENDING'
+    `).run(decision, reason ?? null, decidedAt, reviewerId, offer.approval.id);
+
+    const payload = { commercialOfferId: id, decision, reason: reason ?? null, reviewerId, decidedAt };
+    recordDomainEvent(this.database, "OFFER_APPROVAL_DECIDED", "OFFER_APPROVAL", offer.approval.id, payload, context);
+    recordDomainEvent(this.database, `COMMERCIAL_OFFER_${decision}`, "COMMERCIAL_OFFER", id, { approvalId: offer.approval.id }, context);
+    recordAuditEvent(this.database, "OFFER_APPROVAL_DECIDED", "OFFER_APPROVAL", offer.approval.id, payload, context);
+    recordAuditEvent(this.database, `COMMERCIAL_OFFER_${decision}`, "COMMERCIAL_OFFER", id, { approvalId: offer.approval.id }, context);
+    return this.get(id);
+  }
+
   createFollowUp(id: string, dueAt: string, notes: string | undefined, context: CommandContext) {
     this.get(id);
+    if (!Number.isFinite(Date.parse(dueAt)) || Date.parse(dueAt) <= Date.now()) {
+      throw new ConflictError("INVALID_FOLLOW_UP_DUE_AT", "Follow-up due date must be in the future");
+    }
     const taskId = randomUUID();
     const now = new Date().toISOString();
+    const actorId = context.actorType === "USER" ? context.actorId : null;
+    const assigneeId = actorId && this.database.prepare(`
+      SELECT 1 FROM users WHERE id = ? AND active = 1 AND role IN ('ADMIN', 'MANAGER', 'SALES')
+    `).get(actorId) ? actorId : null;
     this.database.prepare(`
-      INSERT INTO tasks (id, type, status, related_entity_type, related_entity_id, due_at, notes, created_at)
-      VALUES (?, 'FOLLOW_UP', 'OPEN', 'COMMERCIAL_OFFER', ?, ?, ?, ?)
-    `).run(taskId, id, dueAt, notes ?? null, now);
-    const eventPayload = { commercialOfferId: id, dueAt };
+      INSERT INTO tasks (
+        id, type, status, related_entity_type, related_entity_id, due_at, notes, created_at,
+        assignee_id, assignment_updated_at, assignment_updated_by
+      )
+      VALUES (?, 'FOLLOW_UP', 'OPEN', 'COMMERCIAL_OFFER', ?, ?, ?, ?, ?, ?, ?)
+    `).run(taskId, id, dueAt, notes ?? null, now, assigneeId, assigneeId ? now : null, assigneeId);
+    const eventPayload = { commercialOfferId: id, dueAt, assigneeId };
     recordDomainEvent(this.database, "FOLLOW_UP_TASK_CREATED", "TASK", taskId, eventPayload, context);
     recordAuditEvent(this.database, "FOLLOW_UP_TASK_CREATED", "TASK", taskId, eventPayload, context);
-    return { id: taskId, type: "FOLLOW_UP", status: "OPEN", relatedEntityType: "COMMERCIAL_OFFER", relatedEntityId: id, dueAt, notes: notes ?? null, createdAt: now };
+    return { id: taskId, type: "FOLLOW_UP", status: "OPEN", relatedEntityType: "COMMERCIAL_OFFER", relatedEntityId: id, dueAt, notes: notes ?? null, createdAt: now, assigneeId, assignmentUpdatedAt: assigneeId ? now : null, assignmentUpdatedBy: assigneeId };
   }
 }

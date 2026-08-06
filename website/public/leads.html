@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Phoenix BOS lead workspace">
+    <title>Leads | Phoenix BOS</title>
+    <link rel="stylesheet" href="/assets/styles.css">
+    <script src="/assets/app.js" defer></script>
+  </head>
+  <body data-page="leads">
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+          <div class="brand-mark small" aria-hidden="true">P</div>
+          <div><strong>Phoenix BOS</strong><span>Business OS</span></div>
+        </div>
+        <nav aria-label="Primary navigation">
+          <a class="nav-item" href="/dashboard"><span>⌂</span> Dashboard</a>
+          <a class="nav-item active" href="/leads" aria-current="page"><span>◎</span> Leads</a>
+          <a class="nav-item" href="/commercial-offers"><span>◇</span> Commercial Offers</a>
+          <a class="nav-item" href="/tasks"><span>✓</span> Tasks</a>
+          <button class="nav-item" data-coming-soon="Telegram"><span>↗</span> Telegram</button>
+          <button class="nav-item" data-coming-soon="Settings"><span>⚙</span> Settings</button>
+        </nav>
+        <div class="sidebar-footer"><span></span> Vertical 1 active</div>
+      </aside>
+
+      <main class="dashboard-main">
+        <header class="topbar">
+          <button class="menu-button" id="menu-button" aria-label="Toggle navigation" aria-controls="sidebar" aria-expanded="false">☰</button>
+          <div class="topbar-user">
+            <div class="avatar" id="user-avatar" aria-hidden="true">P</div>
+            <div><strong id="user-name">Loading…</strong><span id="user-role"></span></div>
+            <button class="secondary-button" id="logout-button">Log out</button>
+          </div>
+        </header>
+        <div id="logout-error" class="logout-error" role="alert" hidden>Logout could not be completed. Your session remains active; please try again.</div>
+
+        <div class="dashboard-content leads-content">
+          <section class="workspace-heading">
+            <div><p class="eyebrow accent">Commercial operations</p><h1>Leads</h1><p class="muted">Capture opportunities, qualify demand, and convert qualified companies into clients.</p></div>
+            <button class="primary-button compact" id="new-lead-button">New lead</button>
+          </section>
+
+          <div id="workspace-message" class="workspace-message" role="status" hidden></div>
+
+          <section class="lead-summary" aria-label="Lead summary">
+            <article><span>All leads</span><strong id="lead-count-all">—</strong></article>
+            <article><span>New</span><strong id="lead-count-new">—</strong></article>
+            <article><span>Qualified</span><strong id="lead-count-qualified">—</strong></article>
+            <article><span>Converted</span><strong id="lead-count-converted">—</strong></article>
+          </section>
+
+          <section class="workspace-panel" aria-labelledby="lead-list-title">
+            <div class="section-heading"><div><p class="eyebrow accent">Pipeline</p><h2 id="lead-list-title">Current leads</h2></div><button class="secondary-button" id="refresh-leads">Refresh</button></div>
+            <div class="table-scroll">
+              <table class="data-table">
+                <thead><tr><th>Company</th><th>Contact</th><th>Status</th><th>Updated</th><th><span class="sr-only">Actions</span></th></tr></thead>
+                <tbody id="lead-list"><tr><td colspan="5" class="empty-cell">Loading leads…</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+
+          <div id="coming-soon" class="coming-soon" role="status" hidden><strong id="coming-soon-title"></strong><span>This workspace will be available in a future milestone.</span></div>
+        </div>
+      </main>
+    </div>
+
+    <dialog id="lead-dialog" class="modal">
+      <form id="lead-form" method="dialog" novalidate>
+        <div class="modal-heading"><div><p class="eyebrow accent">Lead intake</p><h2>Create a new lead</h2></div><button class="icon-button" type="button" data-close-dialog="lead-dialog" aria-label="Close">×</button></div>
+        <div class="form-grid">
+          <div class="field full"><label for="company-name">Company name</label><input id="company-name" name="companyName" required maxlength="200" autocomplete="organization" aria-describedby="company-name-error"><p class="field-error" id="company-name-error"></p></div>
+          <div class="field"><label for="contact-first-name">Contact first name <span>(optional)</span></label><input id="contact-first-name" name="firstName" maxlength="200" autocomplete="given-name" aria-describedby="contact-first-name-error"><p class="field-error" id="contact-first-name-error"></p></div>
+          <div class="field"><label for="contact-last-name">Contact last name</label><input id="contact-last-name" name="lastName" maxlength="500" autocomplete="family-name"></div>
+          <div class="field"><label for="contact-email">Contact email</label><input id="contact-email" name="email" type="email" autocomplete="email" aria-describedby="contact-email-error"><p class="field-error" id="contact-email-error"></p></div>
+          <div class="field"><label for="contact-phone">Contact phone</label><input id="contact-phone" name="phone" maxlength="50" autocomplete="tel" aria-describedby="contact-phone-error"><p class="field-error" id="contact-phone-error"></p></div>
+        </div>
+        <div id="lead-form-error" class="alert" role="alert" hidden></div>
+        <div class="modal-actions"><button class="secondary-button" type="button" data-close-dialog="lead-dialog">Cancel</button><button class="primary-button compact" type="submit">Create lead</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="qualify-dialog" class="modal small-modal">
+      <form id="qualify-form" method="dialog">
+        <div class="modal-heading"><div><p class="eyebrow accent">Qualification</p><h2>Qualify lead</h2></div><button class="icon-button" type="button" data-close-dialog="qualify-dialog" aria-label="Close">×</button></div>
+        <input id="qualify-lead-id" type="hidden">
+        <div class="field"><label for="qualification-notes">Qualification notes <span>(optional)</span></label><textarea id="qualification-notes" maxlength="500" rows="4" placeholder="Budget, authority, need, or timing evidence"></textarea></div>
+        <div id="qualify-error" class="alert" role="alert" hidden></div>
+        <div class="modal-actions"><button class="secondary-button" type="button" data-close-dialog="qualify-dialog">Cancel</button><button class="primary-button compact" type="submit">Mark qualified</button></div>
+      </form>
+    </dialog>
+  </body>
+</html>

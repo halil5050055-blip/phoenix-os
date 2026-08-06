@@ -43,12 +43,13 @@ The project treats documentation and memory as first-class infrastructure. Decis
 
 1. Read [`AGENTS.md`](AGENTS.md) for agent operating rules.
 2. Read [`PROJECT_RULES.md`](PROJECT_RULES.md) before making changes.
-3. Review [`TODO.md`](TODO.md) for current priorities.
-4. Record durable decisions in `memory/` and technical documentation in `docs/`.
+3. Read the [`project vision`](docs/project-vision.md) for current scope, success metrics, and stakeholder responsibilities.
+4. Review [`TODO.md`](TODO.md) for current priorities.
+5. Record durable decisions in `memory/` and technical documentation in `docs/`.
 
 ## Vertical 1 Backend
 
-The Vertical 1 backend is a Node.js 24 and TypeScript modular monolith using SQLite. It supports lead intake and qualification, conversion to a client, deterministic commercial-offer drafts, approval intake, follow-up tasks, idempotent commands, domain events, and audit events.
+The Vertical 1 backend is a Node.js 24 and TypeScript modular monolith using SQLite. It supports lead intake and qualification, conversion to a client, deterministic commercial-offer drafts, controlled approval decisions, follow-up task completion, idempotent commands, domain events, and audit events.
 
 ```bash
 npm ci
@@ -63,7 +64,7 @@ The API binds to `0.0.0.0` using `PORT`, with a local fallback of `3000`, and st
 
 ### Web UI
 
-After starting Phoenix BOS, open [http://localhost:3000](http://localhost:3000) or `/login` on the deployed Railway domain. Sign in with the address configured as `INITIAL_ADMIN_EMAIL` and its corresponding `INITIAL_ADMIN_PASSWORD`. The dashboard displays the authenticated user, backend status, Vertical 1 status, and placeholders for future Leads, Commercial Offers, and Tasks workspaces.
+After starting Phoenix BOS, open [http://localhost:3000](http://localhost:3000) or `/login` on the deployed Railway domain. Sign in with the address configured as `INITIAL_ADMIN_EMAIL` and its corresponding `INITIAL_ADMIN_PASSWORD`. The dashboard displays the authenticated user, backend status, and Vertical 1 status. Admins and Managers also receive an aggregate workflow report covering lead conversion, offer decisions, task completion, and work needing attention. Admin, Manager, and Sales users can operate leads and commercial offers and monitor follow-up tasks from the web. New follow-ups default to their creator; Admins and Managers can assign open tasks and reschedule any open task, while Sales can reschedule their own assigned tasks. Admins and Accountants can approve or reject pending commercial offers; rejection requires a reason.
 
 The browser session uses the existing JWT authentication in an HTTP-only, `SameSite=Strict` cookie; production cookies are also `Secure`. The application does not store credentials or expose its token to frontend JavaScript. Bearer tokens remain supported for API and Telegram clients.
 
@@ -88,6 +89,9 @@ Available endpoints:
 - `GET /` — Phoenix BOS login application
 - `GET /login` — login application
 - `GET /dashboard` — authenticated dashboard shell
+- `GET /leads` — authenticated Leads workspace for Admin, Manager, and Sales
+- `GET /commercial-offers` — authenticated Commercial Offers workspace; Accountant is read-only
+- `GET /tasks` — authenticated follow-up task workspace for Admin, Manager, and Sales
 - `GET /health` — public deployment readiness
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
@@ -101,17 +105,24 @@ Available endpoints:
 - `GET /api/leads`
 - `POST /api/leads/:id/qualify`
 - `POST /api/leads/:id/convert`
+- `GET /api/clients`
 - `POST /api/commercial-offers`
 - `GET /api/commercial-offers/:id`
 - `GET /api/commercial-offers`
 - `GET /api/tasks`
+- `GET /api/task-assignees` — eligible task owners for Admin and Manager
+- `POST /api/tasks/:id/complete`
+- `POST /api/tasks/:id/assign` — Admin and Manager
+- `POST /api/tasks/:id/reschedule` — Admin, Manager, or the assigned Sales owner
+- `GET /api/reports/vertical-1` — aggregate workflow report for Admin and Manager
 - `POST /api/integrations/telegram/audit`
 - `POST /api/commercial-offers/:id/submit-for-approval`
+- `POST /api/commercial-offers/:id/approval-decision` — Admin and Accountant
 - `POST /api/commercial-offers/:id/follow-up`
 
-Approval intake moves a draft offer to `PENDING_APPROVAL` and creates one pending approval record. Approval decisions remain deferred to the next milestone, which can now enforce them through the authenticated identity boundary. CRM web pages, PDF generation, email delivery, AI integrations, and microservices remain outside the current milestone.
+Approval intake moves a draft offer to `PENDING_APPROVAL` and creates one pending approval record. Admins and Accountants can record exactly one `APPROVED` or `REJECTED` decision; the immutable approval record retains the reviewer, time, and reason and drives the offer status. The Tasks workspace lets Admin, Manager, and Sales users complete open follow-ups exactly once while retaining the actor, timestamp, and optional outcome note. PDF generation, email delivery, AI integrations, and microservices remain outside the current milestone.
 
-Roles are `ADMIN`, `MANAGER`, `SALES`, and `ACCOUNTANT`. Admin, Manager, and Sales may operate leads and offers. Accountants may read commercial offers. Only Admin may manage users. Role changes take effect immediately, deactivation invalidates existing tokens, and the last active administrator cannot be removed or demoted.
+Roles are `ADMIN`, `MANAGER`, `SALES`, and `ACCOUNTANT`. Admin, Manager, and Sales may operate leads and draft offers. Admin and Accountant may decide pending approvals. Accountants otherwise have read-only offer access. Only Admin may manage users. Role changes take effect immediately, deactivation invalidates existing tokens, and the last active administrator cannot be removed or demoted.
 
 Railway and Telegram deployment instructions are in [`docs/deployment/railway.md`](docs/deployment/railway.md). Telegram commands and local startup are documented in [`telegram/README.md`](telegram/README.md).
 

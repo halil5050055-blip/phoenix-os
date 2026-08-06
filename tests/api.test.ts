@@ -44,6 +44,9 @@ describe("Phoenix BOS Vertical 1 API", () => {
     const unauthenticatedDashboard = await request(app).get("/dashboard");
     expect(unauthenticatedDashboard.status).toBe(302);
     expect(unauthenticatedDashboard.headers.location).toBe("/login");
+    const unauthenticatedLeads = await request(app).get("/leads");
+    expect(unauthenticatedLeads.status).toBe(302);
+    expect(unauthenticatedLeads.headers.location).toBe("/login");
 
     const invalidLogin = await request(app).post("/api/auth/login").send({ email: ADMIN_EMAIL, password: "invalid-password" });
     expect(invalidLogin.status).toBe(401);
@@ -62,12 +65,21 @@ describe("Phoenix BOS Vertical 1 API", () => {
     expect(dashboard.status).toBe(200);
     expect(dashboard.text).toContain("Vertical 1 active");
 
+    const leadsPage = await request(app).get("/leads").set("Cookie", cookie);
+    expect(leadsPage.status).toBe(200);
+    expect(leadsPage.text).toContain('id="lead-form"');
+    expect(leadsPage.text).toContain('id="lead-list"');
+
     const session = await request(app).get("/api/auth/session").set("Cookie", cookie);
     expect(session.status).toBe(200);
     expect(session.body.user).toMatchObject({ email: ADMIN_EMAIL, displayName: "Test Admin", role: "ADMIN" });
     expect(session.body).not.toHaveProperty("accessToken");
 
-    const logout = await request(app).post("/api/auth/logout").set("Cookie", cookie);
+    const rejectedCrossOriginLogout = await request(app).post("/api/auth/logout").set("Cookie", cookie);
+    expect(rejectedCrossOriginLogout.status).toBe(403);
+    expect(rejectedCrossOriginLogout.body.error.code).toBe("INVALID_REQUEST_ORIGIN");
+
+    const logout = await request(app).post("/api/auth/logout").set("Cookie", cookie).set("Origin", "http://127.0.0.1").set("Host", "127.0.0.1");
     expect(logout.status).toBe(204);
     expect((logout.headers["set-cookie"] as unknown as string[])[0]).toContain("phoenix_session=");
     expect((await request(app).get("/dashboard").set("Cookie", cookie)).headers.location).toBe("/login");
@@ -106,6 +118,10 @@ describe("Phoenix BOS Vertical 1 API", () => {
     expect(converted.body.lead.status).toBe("CONVERTED");
     expect(converted.body.client.sourceLeadId).toBe(created.body.id);
 
+    const clients = await get("/api/clients");
+    expect(clients.status).toBe(200);
+    expect(clients.body.data).toEqual([expect.objectContaining({ id: converted.body.client.id, name: "Acme Padel", sourceLeadId: created.body.id })]);
+
     const auditCount = database.prepare("SELECT COUNT(*) AS count FROM audit_events").get() as { count: number };
     expect(auditCount.count).toBe(7);
     const domainEventCount = database.prepare("SELECT COUNT(*) AS count FROM domain_events").get() as { count: number };
@@ -134,9 +150,30 @@ describe("Phoenix BOS Vertical 1 API", () => {
     expect(fetched.status).toBe(200);
     expect(fetched.body.items).toHaveLength(2);
 
-    const followUp = await post(`/api/commercial-offers/${offer.body.id}/follow-up`).set("Idempotency-Key", "follow-up-1").send({ dueAt: "2030-01-01T10:00:00.000Z" });
+    const followUp = await post(`/api/commercial-offers/${offer.body.id}/follow-up`).set("Idempotency-Key", "follow-up-1").send({ dueAt: "2100-01-01T10:00:00.000Z" });
     expect(followUp.status).toBe(201);
-    expect(followUp.body).toMatchObject({ type: "FOLLOW_UP", status: "OPEN", relatedEntityId: offer.body.id });
+    expect(followUp.body).toMatchObject({ type: "FOLLOW_UP", status: "OPEN", relatedEntityId: offer.body.id, assigneeId: expect.any(String) });
+
+    const rescheduled = await post(`/api/tasks/${followUp.body.id}/reschedule`).set("Idempotency-Key", "reschedule-task-1").send({ dueAt: "2101-01-01T10:00:00.000Z" });
+    expect(rescheduled.status).toBe(200);
+    expect(rescheduled.body.dueAt).toBe("2101-01-01T10:00:00.000Z");
+    const rescheduleReplay = await post(`/api/tasks/${followUp.body.id}/reschedule`).set("Idempotency-Key", "reschedule-task-1").send({ dueAt: "2101-01-01T10:00:00.000Z" });
+    expect(rescheduleReplay.status).toBe(200);
+    expect(rescheduleReplay.headers["idempotency-replayed"]).toBe("true");
+
+    const unassigned = await post(`/api/tasks/${followUp.body.id}/assign`).set("Idempotency-Key", "unassign-task-1").send({ assigneeId: null });
+    expect(unassigned.status).toBe(200);
+    expect(unassigned.body.assigneeId).toBeNull();
+    const assignmentReplay = await post(`/api/tasks/${followUp.body.id}/assign`).set("Idempotency-Key", "unassign-task-1").send({ assigneeId: null });
+    expect(assignmentReplay.status).toBe(200);
+    expect(assignmentReplay.headers["idempotency-replayed"]).toBe("true");
+
+    const completed = await post(`/api/tasks/${followUp.body.id}/complete`).set("Idempotency-Key", "complete-task-1").send({ note: "Client contacted" });
+    expect(completed.status).toBe(200);
+    expect(completed.body).toMatchObject({ status: "COMPLETED", completionNote: "Client contacted" });
+    const completionReplay = await post(`/api/tasks/${followUp.body.id}/complete`).set("Idempotency-Key", "complete-task-1").send({ note: "Client contacted" });
+    expect(completionReplay.status).toBe(200);
+    expect(completionReplay.headers["idempotency-replayed"]).toBe("true");
   });
 
   it("submits a draft offer for approval exactly once", async () => {
@@ -258,7 +295,16 @@ describe("Phoenix BOS Vertical 1 API", () => {
     expect(accountantLogin.body.user.role).toBe("ACCOUNTANT");
     const accountantToken = accountantLogin.body.accessToken as string;
     expect((await get("/api/leads", accountantToken)).status).toBe(403);
+    expect((await get("/api/reports/vertical-1", accountantToken)).status).toBe(403);
     expect((await get("/api/commercial-offers/unknown", accountantToken)).status).toBe(404);
+    expect((await post("/api/commercial-offers", accountantToken).set("Idempotency-Key", "accountant-create").send({})).status).toBe(403);
+    expect((await post("/api/commercial-offers/unknown/submit-for-approval", accountantToken).set("Idempotency-Key", "accountant-approval").send({})).status).toBe(403);
+    expect((await post("/api/commercial-offers/unknown/follow-up", accountantToken).set("Idempotency-Key", "accountant-follow-up").send({})).status).toBe(403);
+    expect((await post("/api/commercial-offers/unknown/approval-decision", accountantToken).set("Idempotency-Key", "accountant-decision").send({ decision: "APPROVED" })).status).toBe(404);
+    expect((await post("/api/tasks/unknown/complete", accountantToken).set("Idempotency-Key", "accountant-task-complete").send({})).status).toBe(403);
+    expect((await get("/api/task-assignees", accountantToken)).status).toBe(403);
+    expect((await post("/api/tasks/unknown/assign", accountantToken).set("Idempotency-Key", "accountant-task-assign").send({ assigneeId: null })).status).toBe(403);
+    expect((await post("/api/tasks/unknown/reschedule", accountantToken).set("Idempotency-Key", "accountant-task-reschedule").send({ dueAt: "2100-01-01T00:00:00.000Z" })).status).toBe(403);
 
     const manager = await post("/api/users")
       .set("Idempotency-Key", "create-manager-user")
@@ -267,6 +313,11 @@ describe("Phoenix BOS Vertical 1 API", () => {
     const managerLogin = await request(app).post("/api/auth/login").send({ email: "manager@phoenix.test", password: "ManagerPassword123!" });
     const managerLead = await post("/api/leads", managerLogin.body.accessToken).set("Idempotency-Key", "manager-lead").send({ companyName: "Manager Lead" });
     expect(managerLead.status).toBe(201);
+    expect((await get("/api/reports/vertical-1", managerLogin.body.accessToken)).status).toBe(200);
+    expect((await get("/api/task-assignees", managerLogin.body.accessToken)).status).toBe(200);
+    expect((await post("/api/tasks/unknown/assign", managerLogin.body.accessToken).set("Idempotency-Key", "manager-task-assign").send({ assigneeId: null })).status).toBe(404);
+    expect((await post("/api/tasks/unknown/reschedule", managerLogin.body.accessToken).set("Idempotency-Key", "manager-task-reschedule").send({ dueAt: "2100-01-01T00:00:00.000Z" })).status).toBe(404);
+    expect((await post("/api/commercial-offers/unknown/approval-decision", managerLogin.body.accessToken).set("Idempotency-Key", "manager-decision").send({ decision: "APPROVED" })).status).toBe(403);
 
     const deactivated = await remove(`/api/users/${created.body.id}`).set("Idempotency-Key", "deactivate-accountant");
     expect(deactivated.status).toBe(200);
@@ -296,7 +347,7 @@ describe("Phoenix BOS Vertical 1 API", () => {
       currency: "EUR",
       items: [{ description: "Service", quantity: 1, unitPriceMinor: 10_000 }],
     });
-    await post(`/api/commercial-offers/${offer.body.id}/follow-up`).set("Idempotency-Key", "telegram-read-task").send({ dueAt: "2030-01-01T10:00:00.000Z" });
+    await post(`/api/commercial-offers/${offer.body.id}/follow-up`).set("Idempotency-Key", "telegram-read-task").send({ dueAt: "2100-01-01T10:00:00.000Z" });
 
     expect((await get("/api/commercial-offers")).body.data).toHaveLength(1);
     expect((await get("/api/tasks")).body.data).toHaveLength(1);

@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Phoenix BOS commercial offers workspace">
+    <title>Commercial Offers | Phoenix BOS</title>
+    <link rel="stylesheet" href="/assets/styles.css">
+    <script src="/assets/app.js" defer></script>
+    <script src="/assets/offers.js" defer></script>
+  </head>
+  <body data-page="commercial-offers">
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+          <div class="brand-mark small" aria-hidden="true">P</div>
+          <div><strong>Phoenix BOS</strong><span>Business OS</span></div>
+        </div>
+        <nav aria-label="Primary navigation">
+          <a class="nav-item" href="/dashboard"><span>⌂</span> Dashboard</a>
+          <a class="nav-item" href="/leads"><span>◎</span> Leads</a>
+          <a class="nav-item active" href="/commercial-offers" aria-current="page"><span>◇</span> Commercial Offers</a>
+          <a class="nav-item" href="/tasks"><span>✓</span> Tasks</a>
+          <button class="nav-item" data-coming-soon="Telegram"><span>↗</span> Telegram</button>
+          <button class="nav-item" data-coming-soon="Settings"><span>⚙</span> Settings</button>
+        </nav>
+        <div class="sidebar-footer"><span></span> Vertical 1 active</div>
+      </aside>
+
+      <main class="dashboard-main">
+        <header class="topbar">
+          <button class="menu-button" id="menu-button" aria-label="Toggle navigation" aria-controls="sidebar" aria-expanded="false">☰</button>
+          <div class="topbar-user">
+            <div class="avatar" id="user-avatar" aria-hidden="true">P</div>
+            <div><strong id="user-name">Loading…</strong><span id="user-role"></span></div>
+            <button class="secondary-button" id="logout-button">Log out</button>
+          </div>
+        </header>
+        <div id="logout-error" class="logout-error" role="alert" hidden>Logout could not be completed. Your session remains active; please try again.</div>
+
+        <div class="dashboard-content leads-content">
+          <section class="workspace-heading">
+            <div><p class="eyebrow accent">Commercial operations</p><h1>Commercial Offers</h1><p class="muted">Build deterministic drafts, request approval, and schedule follow-up work.</p></div>
+            <button class="primary-button compact" id="new-offer-button" hidden>New offer</button>
+          </section>
+
+          <div id="workspace-message" class="workspace-message" role="status" aria-live="polite" hidden></div>
+
+          <section class="lead-summary" aria-label="Offer summary">
+            <article><span>All offers</span><strong id="offer-count-all">—</strong></article>
+            <article><span>Draft</span><strong id="offer-count-draft">—</strong></article>
+            <article><span>Pending approval</span><strong id="offer-count-pending">—</strong></article>
+            <article><span>Total value</span><strong id="offer-total-value">—</strong></article>
+          </section>
+
+          <section class="workspace-panel" aria-labelledby="offer-list-title">
+            <div class="section-heading"><div><p class="eyebrow accent">Pipeline</p><h2 id="offer-list-title">Current offers</h2></div><button class="secondary-button" id="refresh-offers">Refresh</button></div>
+            <div class="table-scroll">
+              <table class="data-table">
+                <thead><tr><th>Client</th><th>Offer</th><th>Status</th><th>Total</th><th>Updated</th><th><span class="sr-only">Actions</span></th></tr></thead>
+                <tbody id="offer-list"><tr><td colspan="6" class="empty-cell">Loading offers…</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+
+          <div id="coming-soon" class="coming-soon" role="status" hidden><strong id="coming-soon-title"></strong><span>This workspace will be available in a future milestone.</span></div>
+        </div>
+      </main>
+    </div>
+
+    <dialog id="offer-dialog" class="modal offer-modal">
+      <form id="offer-form" method="dialog" novalidate>
+        <div class="modal-heading"><div><p class="eyebrow accent">Draft</p><h2>Create commercial offer</h2></div><button class="icon-button" type="button" data-close-dialog="offer-dialog" aria-label="Close">×</button></div>
+        <div class="form-grid">
+          <div class="field"><label for="offer-client">Client</label><select id="offer-client" required aria-describedby="offer-client-error"><option value="">Select a converted client</option></select><p class="field-error" id="offer-client-error"></p></div>
+          <div class="field"><label for="offer-currency">Currency</label><input id="offer-currency" required maxlength="3" pattern="[A-Z]{3}" value="EUR" aria-describedby="offer-currency-error"><p class="field-error" id="offer-currency-error"></p></div>
+        </div>
+        <div class="line-items-heading"><strong>Line items</strong><button class="secondary-button" id="add-offer-item" type="button">Add item</button></div>
+        <div id="offer-items" class="offer-items"></div>
+        <p class="form-help">Prices are entered as integer minor units; for example, 12500 represents EUR 125.00.</p>
+        <div id="offer-form-error" class="alert" role="alert" hidden></div>
+        <div class="modal-actions"><button class="secondary-button" type="button" data-close-dialog="offer-dialog">Cancel</button><button class="primary-button compact" type="submit">Create draft</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="approval-dialog" class="modal small-modal">
+      <form id="approval-form" method="dialog">
+        <div class="modal-heading"><div><p class="eyebrow accent">Approval</p><h2>Submit offer for approval</h2></div><button class="icon-button" type="button" data-close-dialog="approval-dialog" aria-label="Close">×</button></div>
+        <input id="approval-offer-id" type="hidden">
+        <div class="field"><label for="approval-reason">Review reason <span>(optional)</span></label><textarea id="approval-reason" maxlength="500" rows="4"></textarea></div>
+        <div id="approval-error" class="alert" role="alert" hidden></div>
+        <div class="modal-actions"><button class="secondary-button" type="button" data-close-dialog="approval-dialog">Cancel</button><button class="primary-button compact" type="submit">Submit for approval</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="follow-up-dialog" class="modal small-modal">
+      <form id="follow-up-form" method="dialog">
+        <div class="modal-heading"><div><p class="eyebrow accent">Next action</p><h2>Schedule follow-up</h2></div><button class="icon-button" type="button" data-close-dialog="follow-up-dialog" aria-label="Close">×</button></div>
+        <input id="follow-up-offer-id" type="hidden">
+        <div class="field"><label for="follow-up-due">Due date and time</label><input id="follow-up-due" type="datetime-local" required aria-describedby="follow-up-due-error"><p class="field-error" id="follow-up-due-error"></p></div>
+        <div class="field"><label for="follow-up-notes">Notes <span>(optional)</span></label><textarea id="follow-up-notes" maxlength="500" rows="3"></textarea></div>
+        <div id="follow-up-error" class="alert" role="alert" hidden></div>
+        <div class="modal-actions"><button class="secondary-button" type="button" data-close-dialog="follow-up-dialog">Cancel</button><button class="primary-button compact" type="submit">Create follow-up</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="decision-dialog" class="modal small-modal">
+      <form id="decision-form" method="dialog" novalidate>
+        <div class="modal-heading"><div><p class="eyebrow accent">Finance review</p><h2 id="decision-title">Decide approval</h2></div><button class="icon-button" type="button" data-close-dialog="decision-dialog" aria-label="Close">×</button></div>
+        <input id="decision-offer-id" type="hidden">
+        <input id="decision-value" type="hidden">
+        <div class="field"><label for="decision-reason">Decision reason <span id="decision-reason-requirement">(optional)</span></label><textarea id="decision-reason" maxlength="500" rows="4" aria-describedby="decision-reason-error"></textarea><p class="field-error" id="decision-reason-error"></p></div>
+        <div id="decision-error" class="alert" role="alert" hidden></div>
+        <div class="modal-actions"><button class="secondary-button" type="button" data-close-dialog="decision-dialog">Cancel</button><button class="primary-button compact" id="decision-submit" type="submit">Confirm decision</button></div>
+      </form>
+    </dialog>
+  </body>
+</html>

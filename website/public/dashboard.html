@@ -17,9 +17,9 @@
         </div>
         <nav aria-label="Primary navigation">
           <a class="nav-item active" href="/dashboard" aria-current="page"><span>⌂</span> Dashboard</a>
-          <button class="nav-item" data-coming-soon="Leads"><span>◎</span> Leads</button>
-          <button class="nav-item" data-coming-soon="Commercial Offers"><span>◇</span> Commercial Offers</button>
-          <button class="nav-item" data-coming-soon="Tasks"><span>✓</span> Tasks</button>
+          <a class="nav-item" href="/leads"><span>◎</span> Leads</a>
+          <a class="nav-item" href="/commercial-offers"><span>◇</span> Commercial Offers</a>
+          <a class="nav-item" href="/tasks"><span>✓</span> Tasks</a>
           <button class="nav-item" data-coming-soon="Telegram"><span>↗</span> Telegram</button>
           <button class="nav-item" data-coming-soon="Settings"><span>⚙</span> Settings</button>
         </nav>
@@ -35,6 +35,7 @@
             <button class="secondary-button" id="logout-button">Log out</button>
           </div>
         </header>
+        <div id="logout-error" class="logout-error" role="alert" hidden>Logout could not be completed. Your session remains active; please try again.</div>
 
         <div class="dashboard-content">
           <section class="welcome-row">
@@ -48,12 +49,23 @@
             <article class="status-card"><div class="card-icon">V1</div><div><p>Active workflow</p><strong>Commercial operations</strong><span>Lead → offer → follow-up</span></div></article>
           </section>
 
+          <section id="workflow-report" class="report-section" aria-labelledby="workflow-report-title" hidden>
+            <div class="section-heading"><div><p class="eyebrow accent">Operational visibility</p><h2 id="workflow-report-title">Vertical 1 workflow report</h2></div><span id="report-generated-at">Loading…</span></div>
+            <div id="report-error" class="workspace-message error" role="alert" hidden></div>
+            <div class="report-grid">
+              <article class="report-card"><span>Lead conversion</span><strong id="report-lead-conversion">—</strong><small id="report-lead-detail">Loading pipeline</small></article>
+              <article class="report-card"><span>Offer approvals</span><strong id="report-approved-offers">—</strong><small id="report-offer-detail">Loading decisions</small></article>
+              <article class="report-card"><span>Task completion</span><strong id="report-task-completion">—</strong><small id="report-task-detail">Loading follow-ups</small></article>
+              <article class="report-card risk"><span>Needs attention</span><strong id="report-attention-count">—</strong><small id="report-attention-detail">Loading open work</small></article>
+            </div>
+          </section>
+
           <section aria-labelledby="quick-links-title">
             <div class="section-heading"><div><p class="eyebrow accent">Workspace</p><h2 id="quick-links-title">Quick links</h2></div><span>Foundation milestone</span></div>
             <div class="quick-grid">
-              <button class="quick-card" data-coming-soon="Leads"><span class="quick-icon">◎</span><strong>Leads</strong><small>Qualify and convert opportunities</small><b>Coming soon →</b></button>
-              <button class="quick-card" data-coming-soon="Commercial Offers"><span class="quick-icon">◇</span><strong>Commercial Offers</strong><small>Prepare and review proposals</small><b>Coming soon →</b></button>
-              <button class="quick-card" data-coming-soon="Tasks"><span class="quick-icon">✓</span><strong>Tasks</strong><small>Track follow-ups and next actions</small><b>Coming soon →</b></button>
+              <a class="quick-card" href="/leads"><span class="quick-icon">◎</span><strong>Leads</strong><small>Qualify and convert opportunities</small><b>Open workspace →</b></a>
+              <a class="quick-card" href="/commercial-offers"><span class="quick-icon">◇</span><strong>Commercial Offers</strong><small>Prepare and review proposals</small><b>Open workspace →</b></a>
+              <a class="quick-card" href="/tasks"><span class="quick-icon">✓</span><strong>Tasks</strong><small>Track follow-ups and next actions</small><b>Open workspace →</b></a>
             </div>
           </section>
 

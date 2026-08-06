@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Phoenix BOS task workspace">
+    <title>Tasks | Phoenix BOS</title>
+    <link rel="stylesheet" href="/assets/styles.css">
+    <script src="/assets/app.js" defer></script>
+    <script src="/assets/tasks.js" defer></script>
+  </head>
+  <body data-page="tasks">
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+          <div class="brand-mark small" aria-hidden="true">P</div>
+          <div><strong>Phoenix BOS</strong><span>Business OS</span></div>
+        </div>
+        <nav aria-label="Primary navigation">
+          <a class="nav-item" href="/dashboard"><span>⌂</span> Dashboard</a>
+          <a class="nav-item" href="/leads"><span>◎</span> Leads</a>
+          <a class="nav-item" href="/commercial-offers"><span>◇</span> Commercial Offers</a>
+          <a class="nav-item active" href="/tasks" aria-current="page"><span>✓</span> Tasks</a>
+          <button class="nav-item" data-coming-soon="Telegram"><span>↗</span> Telegram</button>
+          <button class="nav-item" data-coming-soon="Settings"><span>⚙</span> Settings</button>
+        </nav>
+        <div class="sidebar-footer"><span></span> Vertical 1 active</div>
+      </aside>
+
+      <main class="dashboard-main">
+        <header class="topbar">
+          <button class="menu-button" id="menu-button" aria-label="Toggle navigation" aria-controls="sidebar" aria-expanded="false">☰</button>
+          <div class="topbar-user">
+            <div class="avatar" id="user-avatar" aria-hidden="true">P</div>
+            <div><strong id="user-name">Loading…</strong><span id="user-role"></span></div>
+            <button class="secondary-button" id="logout-button">Log out</button>
+          </div>
+        </header>
+        <div id="logout-error" class="logout-error" role="alert" hidden>Logout could not be completed. Your session remains active; please try again.</div>
+
+        <div class="dashboard-content leads-content">
+          <section class="workspace-heading">
+            <div><p class="eyebrow accent">Commercial operations</p><h1>Tasks</h1><p class="muted">Monitor scheduled follow-ups and keep the next commercial action visible.</p></div>
+            <button class="secondary-button" id="refresh-tasks">Refresh</button>
+          </section>
+
+          <div id="workspace-message" class="workspace-message" role="alert" aria-live="polite" hidden></div>
+
+          <section class="lead-summary" aria-label="Task summary">
+            <article><span>Open</span><strong id="task-count-open">—</strong></article>
+            <article><span>Overdue</span><strong id="task-count-overdue">—</strong></article>
+            <article><span>Due today</span><strong id="task-count-today">—</strong></article>
+            <article><span>Upcoming</span><strong id="task-count-upcoming">—</strong></article>
+          </section>
+
+          <section class="workspace-panel" aria-labelledby="task-list-title">
+            <div class="section-heading task-list-heading">
+              <div><p class="eyebrow accent">Work queue</p><h2 id="task-list-title">Follow-up tasks</h2></div>
+              <div class="task-filters" role="group" aria-label="Filter tasks">
+                <button class="secondary-button active" type="button" data-task-filter="all" aria-pressed="true">All</button>
+                <button class="secondary-button" type="button" data-task-filter="overdue" aria-pressed="false">Overdue</button>
+                <button class="secondary-button" type="button" data-task-filter="today" aria-pressed="false">Today</button>
+                <button class="secondary-button" type="button" data-task-filter="upcoming" aria-pressed="false">Upcoming</button>
+                <button class="secondary-button" type="button" data-task-filter="completed" aria-pressed="false">Completed</button>
+              </div>
+            </div>
+            <div class="table-scroll">
+              <table class="data-table">
+                <thead><tr><th>Task</th><th>Owner</th><th>Related record</th><th>Due</th><th>Status</th><th><span class="sr-only">Action</span></th></tr></thead>
+                <tbody id="task-list"><tr><td colspan="6" class="empty-cell">Loading tasks…</td></tr></tbody>
+              </table>
+            </div>
+          </section>
+
+          <div id="coming-soon" class="coming-soon" role="status" hidden><strong id="coming-soon-title"></strong><span>This workspace will be available in a future milestone.</span></div>
+        </div>
+      </main>
+    </div>
+
+    <dialog id="complete-task-dialog" class="modal small-modal">
+      <form id="complete-task-form" method="dialog">
+        <div class="modal-heading"><div><p class="eyebrow accent">Task outcome</p><h2>Complete follow-up</h2></div><button class="icon-button" type="button" data-close-dialog="complete-task-dialog" aria-label="Close">×</button></div>
+        <input id="complete-task-id" type="hidden">
+        <div class="field"><label for="completion-note">Completion note <span>(optional)</span></label><textarea id="completion-note" maxlength="500" rows="4" placeholder="Outcome or next context"></textarea></div>
+        <div id="complete-task-error" class="alert" role="alert" hidden></div>
+        <div class="modal-actions"><button class="secondary-button" type="button" data-close-dialog="complete-task-dialog">Cancel</button><button class="primary-button compact" type="submit">Mark completed</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="assign-task-dialog" class="modal small-modal">
+      <form id="assign-task-form" method="dialog">
+        <div class="modal-heading"><div><p class="eyebrow accent">Task ownership</p><h2>Assign follow-up</h2></div><button class="icon-button" type="button" data-close-dialog="assign-task-dialog" aria-label="Close">×</button></div>
+        <input id="assign-task-id" type="hidden">
+        <div class="field"><label for="task-assignee">Owner</label><select id="task-assignee" aria-describedby="task-assignee-error"><option value="">Unassigned</option></select><p class="field-error" id="task-assignee-error"></p></div>
+        <div id="assign-task-error" class="alert" role="alert" hidden></div>
+        <div class="modal-actions"><button class="secondary-button" type="button" data-close-dialog="assign-task-dialog">Cancel</button><button class="primary-button compact" type="submit">Save owner</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="reschedule-task-dialog" class="modal small-modal">
+      <form id="reschedule-task-form" method="dialog" novalidate>
+        <div class="modal-heading"><div><p class="eyebrow accent">Task timing</p><h2>Reschedule follow-up</h2></div><button class="icon-button" type="button" data-close-dialog="reschedule-task-dialog" aria-label="Close">×</button></div>
+        <input id="reschedule-task-id" type="hidden">
+        <div class="field"><label for="reschedule-task-due">New due date and time</label><input id="reschedule-task-due" type="datetime-local" required aria-describedby="reschedule-task-due-error"><p class="field-error" id="reschedule-task-due-error"></p></div>
+        <div id="reschedule-task-error" class="alert" role="alert" hidden></div>
+        <div class="modal-actions"><button class="secondary-button" type="button" data-close-dialog="reschedule-task-dialog">Cancel</button><button class="primary-button compact" type="submit">Save due date</button></div>
+      </form>
+    </dialog>
+  </body>
+</html>
